@@ -30,6 +30,9 @@
 #include "plane.h"
 #include "lightsource.h"
 #include "pointlightsource.h"
+#include <iostream>
+#include <fstream>
+#include <sstream>
 
 //Globals
 GLuint program;
@@ -41,6 +44,57 @@ GLint uniform_texImage;
 
 Camera *camera;
 RenderEngine *engine;
+
+void init_material_from_obj(Material * m) {
+	m->color = Color(0.8, 0.1, 0.0);
+	m->ka = 0.2;
+	m->kd = 0.9;
+	m->ks = 0.4;
+	m->kr = 0.0;
+	m->kt = 0.0;
+	m->eta = 1.0;
+	m->n = 128;
+}
+
+void load_image_from_obj(World * world, string file_name) {
+	ifstream is(file_name);
+	if(!is.is_open()) {
+		cerr << "could not open file" << endl;
+		exit(0);
+	}
+
+	vector < Vector3D > vertices;
+
+	string c;
+	double v[3];
+	int idx[3][3];
+	Material *m1 = new Material(world);
+
+	while(is >> c) {
+		if(c == "f") {
+			string data, token;
+			for(int i = 0; i < 3; i++) {
+				is >> data;
+				stringstream ss(data);
+				for(int j = 0; j < 3; j++) {
+					getline(ss, token, '/');
+					idx[i][j] = stoi(token);
+				}
+			}
+			Material * m = new Material(world);
+			init_material_from_obj(m)
+			Object * triangle = new Triangle(vertices[idx[0][0]], vertices[idx[1][0]], vertices[idx[2][0]], m);
+			world->addObject(triangle);
+		} else if(c == "v") {
+			is >> v[0] >> v[1] >> v[2];
+			vertices.push_back(Vector3D(v[0], v[1], v[2]));
+		} else if(c == "vn") {
+			is >> v[0] >> v[1] >> v[2];
+		} else if(c == "vt") {
+			is >> v[0] >> v[1];
+		}
+	}
+}
 
 int init_resources(void)
 {
@@ -64,38 +118,38 @@ int init_resources(void)
 	world->setAmbient(Color(1));
 	world->setBackground(Color(0.1, 0.3, 0.6));
 	
-	Material *m = new Material(world);
-	m->color = Color(0.1, 0.7, 0.0);
-	m->ka = 0.2;
-	m->kd = 0.9;
-	m->ks = 0.4;
-	m->kr = 1.0;
-	m->kt = 0.0;
-	m->eta = 1.0;
-	m->n = 128;
+	// Material *m = new Material(world);
+	// m->color = Color(0.1, 0.7, 0.0);
+	// m->ka = 0.2;
+	// m->kd = 0.9;
+	// m->ks = 0.4;
+	// m->kr = 1.0;
+	// m->kt = 0.0;
+	// m->eta = 1.0;
+	// m->n = 128;
 
-	Object *sphere = new Sphere(Vector3D(0, 0, 0), 3, m);
-	Material *m1 = new Material(world);
-	m1->color = Color(0.8, 0.1, 0.0);
-	m1->ka = 0.2;
-	m1->kd = 0.9;
-	m1->ks = 0.4;
-	m1->kr = 0.0;
-	m1->kt = 0.0;
-	m1->eta = 1.0;
-	m1->n = 128;
+	// Object *sphere = new Sphere(Vector3D(0, 0, 0), 3, m);
+	// Material *m1 = new Material(world);
+	// m1->color = Color(0.8, 0.1, 0.0);
+	// m1->ka = 0.2;
+	// m1->kd = 0.9;
+	// m1->ks = 0.4;
+	// m1->kr = 0.0;
+	// m1->kt = 0.0;
+	// m1->eta = 1.0;
+	// m1->n = 128;
 
-	Material *m2 = new Material(world);
-	m2->color = Color(1.0, 1.0, 1.0);
-	m2->ka = 0.4;
-	m2->kd = 0.9;
-	m2->ks = 0.4;
-	m2->kr = 0.1;
-	m2->kt = 0.8;
-	m2->eta = 2.0;
-	m2->n = 128;
-	Object *cylinder = new Cylinder(Vector3D(-7,0,-3),1,Vector3D(0,0,1),m2);
-	Object *sphere2 = new Sphere(Vector3D(4,0,4), 3, m1);
+	// Material *m2 = new Material(world);
+	// m2->color = Color(1.0, 1.0, 1.0);
+	// m2->ka = 0.4;
+	// m2->kd = 0.9;
+	// m2->ks = 0.4;
+	// m2->kr = 0.1;
+	// m2->kt = 0.8;
+	// m2->eta = 2.0;
+	// m2->n = 128;
+	// Object *cylinder = new Cylinder(Vector3D(-7,0,-3),1,Vector3D(0,0,1),m2);
+	// Object *sphere2 = new Sphere(Vector3D(4,0,4), 3, m1);
 	Material *floorMat = new Material(world);
 	floorMat->color = Color(0.5, 0.5, 0.5);
 	floorMat->ka = 0.1;
@@ -105,14 +159,16 @@ int init_resources(void)
 	floorMat->kr = 0.5;
 	floorMat->eta = 1.0;
 	Object *plane = new Plane(Vector3D(10, -3, 10), Vector3D(-10, -3, 10),Vector3D(-10, -3, -10),Vector3D(10, -3, -10), floorMat);
-	world->addObject(sphere);
-	world->addObject(sphere2);
-	world->addObject(plane);
+	// world->addObject(sphere);
+	// world->addObject(sphere2);
+	// world->addObject(plane);
 	// world->addObject(cylinder);
 	LightSource *light = new PointLightSource(world, Vector3D(-10, 10, 0), Color(1, 1, 1));
 	//LightSource *light2 = new PointLightSource(world, Vector3D(0, 10, 0), Color(1, 1, 1));
 	world->addLight(light);
 	//world->addLight(light2);
+
+	load_image_from_obj(world, "bs_angry.obj");
 
 	engine = new RenderEngine(world, camera);
 
