@@ -69,7 +69,7 @@ void load_image_from_obj(World * world, string file_name) {
 
 	string c;
 	double v[3];
-	int idx[3][3];
+	vector < int > idx[3];
 	Material *m1 = new Material(world);
 
 	while(is >> c) {
@@ -78,9 +78,8 @@ void load_image_from_obj(World * world, string file_name) {
 			for(int i = 0; i < 3; i++) {
 				is >> data;
 				stringstream ss(data);
-				for(int j = 0; j < 3; j++) {
-					getline(ss, token, '/');
-					idx[i][j] = stoi(token);
+				while(getline(ss, token, '/')) {
+					idx[i].push_back(stoi(token));
 				}
 			}
 			Material * m = new Material(world);
