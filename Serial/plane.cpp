@@ -13,7 +13,7 @@ bool Plane::triangleIntersect(Ray& r,Vector3D vertexA,Vector3D vertexB,Vector3D 
 {
 	//barycentric coordinate check
 	double A = determinant(vertexA-vertexB,vertexA-vertexC,r.getDirection());
-	if(std::abs(A) < EPSILON) return false;
+	if(abs(A) < EPSILON) return false;
 	double beta = determinant(vertexA-r.getOrigin(),vertexA-vertexC,r.getDirection()) / A;
 	double gamma = determinant(vertexA-vertexB,vertexA-r.getOrigin(),r.getDirection()) / A;
 	double t = determinant(vertexA-vertexB,vertexA-vertexC,vertexA-r.getOrigin()) / A;

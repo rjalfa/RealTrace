@@ -102,11 +102,11 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 
 	string c;
 	double v[3];
-	vector < int > idx[3];
 	// Material *m1 = new Material(world);
 
 	while(is >> c) {
 		if(c == "f") {
+			vector < int > idx[3];
 			string data, token;
 			for(int i = 0; i < 3; i++) {
 				is >> data;
@@ -117,6 +117,7 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 			}
 			Material * m = new Material(world);
 			init_material_from_obj(m);
+			// cout << idx[0][0] << " " << idx[1][0] << " " << idx[2][0] << endl;
 			Object * triangle = new Triangle(vertices[idx[0][0]], vertices[idx[1][0]], vertices[idx[2][0]], m);
 			// cerr << "rendered\n";
 			world->addObject(triangle);
@@ -129,6 +130,10 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 		} else if(c == "vt") {
 			is >> v[0] >> v[1];
 			texture_vertices.push_back(make_pair((double)v[0],(double)v[1]));
+		} else if(c[0] == '#') {
+			getline(is, c);
+		} else {
+			getline(is, c);
 		}
 	}
 }
