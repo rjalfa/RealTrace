@@ -143,9 +143,7 @@ int init_resources(void)
 		fprintf(stderr, "Could not bind location: coord2d\n");
 		return 0;
 	}
-
-	//Initialize raytracer objects
-	Vector3D camera_position(0, 10, 10);
+	Vector3D camera_position(-20, 5, 0);
 	Vector3D camera_target(0, 0, 0); //Looking down -Z axis
 	Vector3D camera_up(0, 1, 0);
 	float camera_fovy =  45;
@@ -206,7 +204,7 @@ int init_resources(void)
 	//world->addLight(light2);
 
 	// load_image_from_obj(world, "pig_triangulated.obj");
-	load_image_from_obj(world, "tetrahedron.obj");
+	load_image_from_obj(world, "bob_tri.obj");
 	engine = new RenderEngine(world, camera);
 
 	//Initialise texture
