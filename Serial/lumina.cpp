@@ -33,6 +33,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <utility>
 
 #define SCALING_FACTOR 5
 
@@ -58,19 +59,51 @@ void init_material_from_obj(Material * m) {
 	m->n = 128;
 }
 
-void load_image_from_obj(World * world, string file_name) {
+void get_value_by_coordinate()
+{
+
+}
+
+void load_image_from_obj(World * world, string file_name, string texture_file_name = "", string occlusion_map_file_name = "") {
 	ifstream is(file_name);
 	if(!is.is_open()) {
 		cerr << "could not open file" << endl;
 		exit(0);
 	}
 
+	bool has_texture_map = false;
+
+	ILuint imageID = -1;
+	
+	if(texture_file_name != "") {
+		//Open and Load Texture file via devIL
+    	ilGenImages(1, &imageID);
+		ilBindImage(imageID);
+		if(!ilLoadImage(texture_file_name.c_str()))
+		{
+			cerr << "Internal Texture Load Error" << endl;
+			exit(1);
+		}
+
+		ILenum devilError = ilGetError();
+		if (devilError != IL_NO_ERROR) {
+    		cerr << "Devil Error: " << iluErrorString(devilError) << endl;
+    		exit(1);
+		}
+		
+		
+		exit(0);
+		has_texture_map = true;
+	}
+
 	vector < Vector3D > vertices;
+	vector < Vector3D > normal_vertices;
+	vector < pair<double, double> > texture_vertices;
 
 	string c;
 	double v[3];
 	vector < int > idx[3];
-	Material *m1 = new Material(world);
+	// Material *m1 = new Material(world);
 
 	while(is >> c) {
 		if(c == "f") {
@@ -85,14 +118,17 @@ void load_image_from_obj(World * world, string file_name) {
 			Material * m = new Material(world);
 			init_material_from_obj(m);
 			Object * triangle = new Triangle(vertices[idx[0][0]], vertices[idx[1][0]], vertices[idx[2][0]], m);
+			// cerr << "rendered\n";
 			world->addObject(triangle);
 		} else if(c == "v") {
 			is >> v[0] >> v[1] >> v[2];
 			vertices.push_back(Vector3D(v[0]*SCALING_FACTOR, v[1]*SCALING_FACTOR, v[2]*SCALING_FACTOR));
 		} else if(c == "vn") {
 			is >> v[0] >> v[1] >> v[2];
+			normal_vertices.push_back(Vector3D(v[0], v[1], v[2]));
 		} else if(c == "vt") {
 			is >> v[0] >> v[1];
+			texture_vertices.push_back(make_pair((double)v[0],(double)v[1]));
 		}
 	}
 }
@@ -109,7 +145,7 @@ int init_resources(void)
 	}
 
 	//Initialize raytracer objects
-	Vector3D camera_position(20, 20, 0);
+	Vector3D camera_position(0, 10, 10);
 	Vector3D camera_target(0, 0, 0); //Looking down -Z axis
 	Vector3D camera_up(0, 1, 0);
 	float camera_fovy =  45;
@@ -130,37 +166,37 @@ int init_resources(void)
 	// m->n = 128;
 
 	// Object *sphere = new Sphere(Vector3D(0, 0, 0), 3, m);
-	Material *m1 = new Material(world);
-	m1->color = Color(0.8, 0.1, 0.0);
-	m1->ka = 0.2;
-	m1->kd = 0.9;
-	m1->ks = 0.4;
-	m1->kr = 0.0;
-	m1->kt = 0.0;
-	m1->eta = 1.0;
-	m1->n = 128;
+	// Material *m1 = new Material(world);
+	// m1->color = Color(0.8, 0.1, 0.0);
+	// m1->ka = 0.2;
+	// m1->kd = 0.9;
+	// m1->ks = 0.4;
+	// m1->kr = 0.0;
+	// m1->kt = 0.0;
+	// m1->eta = 1.0;
+	// m1->n = 128;
 
-	Material *m2 = new Material(world);
-	m2->color = Color(1.0, 1.0, 1.0);
-	m2->ka = 0.4;
-	m2->kd = 0.9;
-	m2->ks = 0.4;
-	m2->kr = 0.1;
-	m2->kt = 0.8;
-	m2->eta = 2.0;
-	m2->n = 128;
+	// Material *m2 = new Material(world);
+	// m2->color = Color(1.0, 1.0, 1.0);
+	// m2->ka = 0.4;
+	// m2->kd = 0.9;
+	// m2->ks = 0.4;
+	// m2->kr = 0.1;
+	// m2->kt = 0.8;
+	// m2->eta = 2.0;
+	// m2->n = 128;
 	// Object *cylinder = new Cylinder(Vector3D(-7,0,-3),1,Vector3D(0,0,1),m2);
 	// Object *sphere2 = new Sphere(Vector3D(4,0,4), 3, m1);
-	Material *floorMat = new Material(world);
-	floorMat->color = Color(0.5, 0.5, 0.5);
-	floorMat->ka = 0.1;
-	floorMat->kd = 0.9;
-	floorMat->ks = 0.2;
-	floorMat->kt = 0.0;
-	floorMat->kr = 0.5;
-	floorMat->eta = 1.0;
-	Object *plane = new Plane(Vector3D(10, -3, 10), Vector3D(-10, -3, 10),Vector3D(-10, -3, -10),Vector3D(10, -3, -10), floorMat);
-	// world->addObject(sphere);
+	// Material *floorMat = new Material(world);
+	// floorMat->color = Color(0.5, 0.5, 0.5);
+	// floorMat->ka = 0.1;
+	// floorMat->kd = 0.9;
+	// floorMat->ks = 0.2;
+	// floorMat->kt = 0.0;
+	// floorMat->kr = 0.5;
+	// floorMat->eta = 1.0;
+	// Object *plane = new Plane(Vector3D(10, -3, 10), Vector3D(-10, -3, 10),Vector3D(-10, -3, -10),Vector3D(10, -3, -10), floorMat);
+	// // world->addObject(sphere);
 	 // world->addObject(sphere2);
 	 // world->addObject(plane);
 	 // world->addObject(cylinder);
@@ -169,8 +205,8 @@ int init_resources(void)
 	world->addLight(light);
 	//world->addLight(light2);
 
-	load_image_from_obj(world, "pig_triangulated.obj");
-
+	// load_image_from_obj(world, "pig_triangulated.obj");
+	load_image_from_obj(world, "tetrahedron.obj");
 	engine = new RenderEngine(world, camera);
 
 	//Initialise texture
