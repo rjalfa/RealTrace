@@ -42,7 +42,7 @@ Color World::shade_ray(Ray ray)
 			firstIntersection(shadowRay);
 			if(shadowRay.didHit()) {
 				isShadow = true;
-				shadowColor = ambient*(intersectedObject->getMaterial()->color)*(intersectedObject->getMaterial())->ka;
+				shadowColor = ambient*(intersectedObject->getMaterial()->shade(ray))*(intersectedObject->getMaterial())->ka;
 			}
 		}
 		//..Compute Shade factor due to light
@@ -50,7 +50,7 @@ Color World::shade_ray(Ray ray)
 		for(LightSource* ls : this->lightSourceList) {
 			lightColor = lightColor + get_light_shade(ray.getPosition(),intersectedObject->getNormalAtPosition(ray.getPosition()),*ls,intersectedObject->getMaterial(),ray.getDirection());
 		}
-		lightColor = lightColor + ambient*(intersectedObject->getMaterial()->color)*(intersectedObject->getMaterial())->ka;
+		lightColor = lightColor + ambient*(intersectedObject->getMaterial()->shade(ray))*(intersectedObject->getMaterial())->ka;
 		//if(shadowEffect) lightColor = lightColor*intersectedObject->getMaterial()->ka;
 		
 		Color finalColor = lightColor;
@@ -117,6 +117,6 @@ Color World::get_light_shade(const Vector3D& position, const Vector3D& normal, c
 	float fatt = 1.0 / (1.0 + 0.05*dist);
 	float diffuse = std::max(dot(n,normalize(vLightPosition)),0.0f);
 	float specular = std::max(std::pow(dot(normalize(vViewVector),r),mat->n),0.0);
-	return (mat->kd)*diffuse*(lightSource.getIntensity())*(mat->color) + (mat->ks)*specular*(lightSource.getIntensity());
+	return (mat->kd)*diffuse*(lightSource.getIntensity())*(mat->shade(Ray(position,viewVector))) + (mat->ks)*specular*(lightSource.getIntensity());
 }
 

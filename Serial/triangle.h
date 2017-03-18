@@ -6,6 +6,7 @@
 #include "ray.h"
 #include "vector3D.h"
 #include "color.h"
+#define EPSILON 1e-7
 
 class Triangle : public Object
 {

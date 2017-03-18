@@ -6,7 +6,6 @@
 #include <iostream>
 #include <cstdio>
 using namespace std;
-#define EPSILON 1e-7
 
 bool Triangle::intersect(Ray& r) const
 {

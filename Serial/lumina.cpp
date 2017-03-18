@@ -35,7 +35,7 @@
 #include <sstream>
 #include <utility>
 
-#define SCALING_FACTOR 5
+#define SCALING_FACTOR 10
 
 //Globals
 GLuint program;
@@ -59,9 +59,23 @@ void init_material_from_obj(Material * m) {
 	m->n = 128;
 }
 
-void get_value_by_coordinate()
+Color get_value_by_coordinate(ILuint imageID, double u, double v)
 {
+	ILubyte *bytes = ilGetData();
+	ILuint width = ilGetInteger(IL_IMAGE_WIDTH);
+	ILuint height = ilGetInteger(IL_IMAGE_HEIGHT);
+	u = u*width;
+	v = v*height;
+	int i = (int)floor(u);
+	int j = (int)floor(v);
+	if(i >= 0 && i < height && j >= 0 && j < width) return Color(bytes[(i*width + j)*4 + 0],bytes[(i*width + j)*4 + 1],bytes[(i*width + j)*4 + 2]);
+	cerr << "ERROR!" << i << " " << j << endl;
+	return Color(0.8, 0.1, 0.0);
+}
 
+Color get_value_by_coordinate(ILuint imageID, pair<double,double> p)
+{
+	return get_value_by_coordinate(imageID, p.first, p.second);
 }
 
 void load_image_from_obj(World * world, string file_name, string texture_file_name = "", string occlusion_map_file_name = "") {
@@ -74,7 +88,7 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 	bool has_texture_map = false;
 
 	ILuint imageID = -1;
-	
+		
 	if(texture_file_name != "") {
 		//Open and Load Texture file via devIL
     	ilGenImages(1, &imageID);
@@ -90,9 +104,6 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
     		cerr << "Devil Error: " << iluErrorString(devilError) << endl;
     		exit(1);
 		}
-		
-		
-		exit(0);
 		has_texture_map = true;
 	}
 
@@ -115,8 +126,14 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 					idx[i].push_back(stoi(token));
 				}
 			}
-			Material * m = new Material(world);
-			init_material_from_obj(m);
+			Material * m = NULL;
+			if(has_texture_map && idx[0].size() >= 2 && idx[1].size() >= 2 && idx[2].size() >= 2) {
+				m = new BarycentricMaterial(world,vertices[idx[0][0]], vertices[idx[1][0]], vertices[idx[2][0]],get_value_by_coordinate(imageID,texture_vertices[idx[0][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[1][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[2][1]]));
+			}
+			else {
+				m = new Material(world);
+				init_material_from_obj(m);
+			}
 			// cout << idx[0][0] << " " << idx[1][0] << " " << idx[2][0] << endl;
 			Object * triangle = new Triangle(vertices[idx[0][0]], vertices[idx[1][0]], vertices[idx[2][0]], m);
 			// cerr << "rendered\n";
@@ -148,7 +165,7 @@ int init_resources(void)
 		fprintf(stderr, "Could not bind location: coord2d\n");
 		return 0;
 	}
-	Vector3D camera_position(-20, 5, 0);
+	Vector3D camera_position(0, 100, 100);
 	Vector3D camera_target(0, 0, 0); //Looking down -Z axis
 	Vector3D camera_up(0, 1, 0);
 	float camera_fovy =  45;
@@ -203,13 +220,16 @@ int init_resources(void)
 	 // world->addObject(sphere2);
 	 // world->addObject(plane);
 	 // world->addObject(cylinder);
+	// Material *m = new BarycentricMaterial(world,Vector3D(3,3,0),Vector3D(3,-3,0), Vector3D(0,0,0),Color(1.0,0.0,0.0),Color(1.0,1.0,0.0),Color(0.0,0.0,1.0));
+	// Object *tr = new Triangle(Vector3D(3,3,0),Vector3D(3,-3,0), Vector3D(0,0,0),m);
+	// world->addObject(tr);
 	LightSource *light = new PointLightSource(world, Vector3D(-10, 10, 0), Color(1, 1, 1));
 	//LightSource *light2 = new PointLightSource(world, Vector3D(0, 10, 0), Color(1, 1, 1));
 	world->addLight(light);
 	//world->addLight(light2);
 
 	// load_image_from_obj(world, "pig_triangulated.obj");
-	load_image_from_obj(world, "bob_tri.obj");
+	load_image_from_obj(world, "tetrahedron.obj", "bob_diffuse.png");
 	engine = new RenderEngine(world, camera);
 
 	//Initialise texture
@@ -322,12 +342,12 @@ int main(int argc, char* argv[])
 		screen_width -= (screen_width % 2); //Make it even
 		screen_height -= (screen_height % 2); //Make it even
 	}
-	fprintf(stderr, "Welcome to Lumina raytracer.\nFull command: %s [width] [height]\nPress 's' to save framebufer to disk.\n", argv[0]);
+	fprintf(stderr, "Welcome to RealTrace. All rights reserved. This application or any portion thereof may not be reproduced or used in any manner whatsoever without the express written permission of the creators except for the use of brief quotations in a code review.\nFull command: %s [width] [height]\nPress 's' to save framebufer to disk.\n", argv[0]);
 	/* Glut-related initialising functions */
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH | GLUT_MULTISAMPLE);
 	glutInitWindowSize(screen_width, screen_height);
-	glutCreateWindow("Assignment 6: Raytracing");
+	glutCreateWindow("RealTrace [TM] | Real Time Ray Tracer");
 #ifndef __APPLE__
 	GLenum glew_status = glewInit();
 	if(glew_status != GLEW_OK)
