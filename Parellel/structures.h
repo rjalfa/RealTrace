@@ -1,11 +1,12 @@
 #ifndef __STRUCTURES_H
 #define __STRUCTURES_H
-
+class Triangle;
 struct Ray
 {
 	float3 origin;
 	float3 direction;
 	int has_intersected;
+	Triangle* intersected;
 	float t;
 };
 
@@ -26,7 +27,7 @@ class Triangle
 		__device__ bool intersect(Ray *r);
 };
 
-__device__ float3 get_light_color(float3 point, float3 normal, LightSource* l);
+__device__ float3 get_light_color(float3 point, float3 normal, LightSource* l, Triangle* t, float3 viewVector);
 
 //Structures
 __device__ bool operator==(const float3& v1, const float3& v2);
@@ -45,5 +46,6 @@ __device__ float3 crossProduct(const float3& v1, const float3& v2);
 __device__ float distance(const float3& v1, const float3& v2);
 __device__ float dotProduct(const float3& v1, const float3& v2);
 __device__ float tripleProduct(const float3& v1,const float3& v2,const float3& v3);
+__device__ float3 get_point(Ray* r, float t);
 
 #endif

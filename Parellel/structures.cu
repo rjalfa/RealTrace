@@ -1,11 +1,6 @@
 #include "structures.h"
 #include "utilities.h"
 
-__device__ float3 Triangle::get_normal()
-{
-	return make_float3(0,0,0);
-}
-
 __device__ bool operator==(const float3& v1, const float3& v2)
 {
 	if (v1.x != v2.x) return false;
@@ -108,6 +103,10 @@ __device__ float3 crossProduct(const float3& v1, const float3& v2)
 	return tmp; 
 }
 
+__device__ float3 Triangle::get_normal()
+{
+	return crossProduct(vertexA-vertexB,vertexA-vertexC);
+}
 
 __device__ bool Triangle::intersect(Ray *r)
 {
@@ -120,8 +119,13 @@ __device__ bool Triangle::intersect(Ray *r)
 	if(!r->has_intersected)	{
 		r->has_intersected = true;
 		r->t = t;
+		r->intersected = this;
 	}
-	else r->t = (r->t)>t?t:r->t;
+	else if(r->t > t)
+	{
+		r->t = t;
+		r->intersected = this;
+	}
 	return true;
 }
 
