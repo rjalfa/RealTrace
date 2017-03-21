@@ -35,7 +35,7 @@
 #include <sstream>
 #include <utility>
 
-#define SCALING_FACTOR 10
+#define SCALING_FACTOR 75
 
 //Globals
 GLuint program;
@@ -229,7 +229,7 @@ int init_resources(void)
 	//world->addLight(light2);
 
 	// load_image_from_obj(world, "pig_triangulated.obj");
-	load_image_from_obj(world, "tetrahedron.obj", "bob_diffuse.png");
+	load_image_from_obj(world, "bs_angry.obj");
 	engine = new RenderEngine(world, camera);
 
 	//Initialise texture

@@ -23,3 +23,14 @@ Vector3D Triangle::getNormalAtPosition(const Vector3D& position) const
 {
 	return crossProduct(vertexA-vertexB,vertexA-vertexC);
 }
+
+BBox Triangle::getWorldBound() {
+	BBox temp;
+	for(int axis = 0; axis < 3; axis++) {
+		for(int vno = 0; vno < 3; vno++) {
+			temp.axis_min[axis] = min(temp.axis_min[axis], getVertex(vno).e[axis]);
+			temp.axis_max[axis] = max(temp.axis_max[axis], getVertex(vno).e[axis]);
+		}
+	}
+	return temp;
+}
