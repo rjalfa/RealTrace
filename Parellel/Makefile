@@ -11,14 +11,17 @@ NVCC_FLAGS = -g -G -Xcompiler "-Wall -Wno-deprecated-declarations -Wno-deprecate
 
 all: main
 
-main: main.o kernel.o
+main: main.o kernel.o structures.o
 	$(NVCC) $^ -o $@ $(LDFLAGS)
 
-main.o: main.cpp kernel.h interactions.h
+main.o: main.cpp kernel.h interactions.h structures.h
 	$(NVCC) $(NVCC_FLAGS) -c $< -o $@
 
-kernel.o: kernel.cu kernel.h
+kernel.o: kernel.cu kernel.h structures.h
+	$(NVCC) $(NVCC_FLAGS) -c $< -o $@
+
+structures.o: structures.cu structures.h
 	$(NVCC) $(NVCC_FLAGS) -c $< -o $@
 
 clean:
-	-rm -f main main.o kernel.o
+	-rm -f main main.o kernel.o structures.o

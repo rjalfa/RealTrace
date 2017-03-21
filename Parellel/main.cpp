@@ -56,9 +56,6 @@ void initGLUT(int *argc, char **argv) {
   glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
   glutInitWindowSize(W, H);
   glutCreateWindow(TITLE_STRING);
-#ifndef __APPLE__
-  glewInit();
-#endif
 }
 
 void initPixelBuffer() {
