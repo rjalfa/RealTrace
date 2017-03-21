@@ -1,6 +1,7 @@
 #include "structures.h"
+#include "utilities.h"
 
-float3 Triangle::get_normal()
+__device__ float3 Triangle::get_normal()
 {
 	return make_float3(0,0,0);
 }
@@ -79,4 +80,20 @@ __device__ float dotProduct(const float3& v1, const float3& v2)
 __device__ float tripleProduct(const float3& v1,const float3& v2,const float3& v3)
 {
 	return dotProduct(( crossProduct(v1, v2)), v3);   
+}
+
+__device__ bool Triangle::intersect(Ray *r)
+{
+	float A = determinant(vertexA-vertexB,vertexA-vertexC,r->direction);
+	if(abs(A) < EPSILON) return false;
+	float beta = determinant(vertexA-r->origin,vertexA-vertexC,r->direction) / A;
+	float gamma = determinant(vertexA-vertexB,vertexA-r->origin,r->direction) / A;
+	float t = determinant(vertexA-vertexB,vertexA-vertexC,vertexA-r->origin) / A;
+	if(!(beta > 0.0 && gamma > 0.0 && beta+gamma < 1.0)) return false;
+	if(!r->has_intersected)	{
+		r->has_intersected = true;
+		r->t = t;
+	}
+	else r->t = (r->t)>t?t:r->t;
+	return true;
 }

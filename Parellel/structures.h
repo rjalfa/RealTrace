@@ -1,19 +1,12 @@
 #ifndef __STRUCTURES_H
 #define __STRUCTURES_H
 
-class Triangle
-{
-	public:
-		float3 vertex1;
-		float3 vertex2;
-		float3 vertex3;
-		__device__ __host__ float3 get_normal();
-};
-
 struct Ray
 {
 	float3 origin;
 	float3 direction;
+	int has_intersected;
+	float t;
 };
 
 struct LightSource
@@ -21,9 +14,16 @@ struct LightSource
 	float3 color;
 };
 
-__device__ __host__ bool intersect(Triangle* t, Ray* r);
-
-__device__ __host__ float determinant();
+class Triangle
+{
+	public:
+		float3 vertexA;
+		float3 vertexB;
+		float3 vertexC;
+		float3 color;
+		__device__ float3 get_normal();
+		__device__ bool intersect(Ray *r);
+};
 
 __device__ float3 get_light_color(float3 point, float3 normal, LightSource* l);
 
