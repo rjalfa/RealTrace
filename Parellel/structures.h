@@ -11,6 +11,7 @@ struct Ray
 
 struct LightSource
 {
+	float3 position;
 	float3 color;
 };
 
@@ -41,6 +42,7 @@ __device__ float length(const float3& f);
 __device__ float3 normalize(const float3& f);
 __device__ float3 unitVector(const float3& v);
 __device__ float3 crossProduct(const float3& v1, const float3& v2);
+__device__ float distance(const float3& v1, const float3& v2);
 __device__ float dotProduct(const float3& v1, const float3& v2);
 __device__ float tripleProduct(const float3& v1,const float3& v2,const float3& v3);
 
