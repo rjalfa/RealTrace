@@ -35,7 +35,7 @@ __global__ void raytrace(uchar4 *d_out, int w, int h, Ray* rays, Triangle* trian
 
 void kernelLauncher(uchar4 *d_out, int w, int h, Ray* rays, Triangle* triangles, int num_triangles, LightSource* l) {
   //AMBIENT_COLOR = make_float3()
-  //const dim3 blockSize(TX, TY);
-  //const dim3 gridSize = dim3((w + TX - 1)/TX, (h + TY - 1)/TY);
-  //raytrace<<<gridSize, blockSize>>>(d_out, w, h, p, s);
+  const dim3 blockSize(TX, TY);
+  const dim3 gridSize = dim3(w/TX,h/TY);
+  raytrace<<<gridSize, blockSize>>>(d_out, w, h, rays, triangles, num_triangles, l);
  }

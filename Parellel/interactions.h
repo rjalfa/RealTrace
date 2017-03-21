@@ -1,7 +1,7 @@
 #ifndef INTERACTIONS_H
  #define INTERACTIONS_H
- #define W 600
- #define H 600
+ #define W 128
+ #define H 128
  #define DELTA_P 0.1f
  #define TITLE_STRING "Stability"
  int sys = 0;
