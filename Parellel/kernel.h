@@ -1,9 +1,11 @@
 #ifndef KERNEL_H
 #define KERNEL_H
  
-struct uchar4;
-struct int2;
- 
-void kernelLauncher(uchar4 *d_out, int w, int h, float p, int s);
- 
+struct Ray;
+class Triangle;
+class uchar4;
+struct LightSource;
+
+void kernelLauncher(uchar4 *d_out, int w, int h, Ray* rays, Triangle* triangles, int num_triangles, LightSource* l); 
+
 #endif
