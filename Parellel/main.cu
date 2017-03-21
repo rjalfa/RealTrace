@@ -82,6 +82,7 @@ void initGLUT(int *argc, char **argv) {
 }
 
 void initPixelBuffer() {
+  cerr << "Hello" << endl;
   glGenBuffers(1, &pbo);
   glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
   glBufferData(GL_PIXEL_UNPACK_BUFFER, 4*W*H*sizeof(GLubyte), 0,
@@ -190,7 +191,8 @@ void exitfunc() {
 }
 
 int main(int argc, char** argv) {
-  printInstructions();
+  // printInstructions();
+  glewInit();
   initGLUT(&argc, argv);
   gluOrtho2D(0, W, H, 0);
   glutKeyboardFunc(keyboard);
@@ -199,6 +201,7 @@ int main(int argc, char** argv) {
   glutMotionFunc(mouseDrag);
   glutDisplayFunc(display);
   initPixelBuffer();
+  readData("tetrahedron.obj");
   glutMainLoop();
   atexit(exitfunc);
   return 0;
