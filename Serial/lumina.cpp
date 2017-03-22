@@ -114,7 +114,7 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 	string c;
 	double v[3];
 	// Material *m1 = new Material(world);
-
+	vector < Triangle > all_triangles;
 	while(is >> c) {
 		if(c == "f") {
 			vector < int > idx[3];
@@ -135,8 +135,9 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 				init_material_from_obj(m);
 			}
 			// cout << idx[0][0] << " " << idx[1][0] << " " << idx[2][0] << endl;
-			Object * triangle = new Triangle(vertices[idx[0][0]], vertices[idx[1][0]], vertices[idx[2][0]], m);
+			Triangle * triangle = new Triangle(vertices[idx[0][0]], vertices[idx[1][0]], vertices[idx[2][0]], m);
 			// cerr << "rendered\n";
+			all_triangles.push_back(*triangle);
 			world->addObject(triangle);
 		} else if(c == "v") {
 			is >> v[0] >> v[1] >> v[2];
@@ -153,6 +154,8 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 			getline(is, c);
 		}
 	}
+
+	world->uniform_grid = UniformGrid(all_triangles);
 }
 
 int init_resources(void)
@@ -229,7 +232,7 @@ int init_resources(void)
 	//world->addLight(light2);
 
 	// load_image_from_obj(world, "pig_triangulated.obj");
-	load_image_from_obj(world, "bs_angry.obj");
+	load_image_from_obj(world, "tetrahedron.obj");
 	engine = new RenderEngine(world, camera);
 
 	//Initialise texture
@@ -244,6 +247,7 @@ int init_resources(void)
 		fprintf(stderr, "Could not bind uniform: texImage\n");
 		return 0;
 	}
+	// world->uniform_grid.free();
 	return 1;
 }
 
