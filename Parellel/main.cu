@@ -17,14 +17,16 @@
 #ifdef __APPLE__
 #include <GLUT/glut.h>
 #else
-#include <GL/glew.h>
+//#include <GL/glew.h>
 #include <GL/freeglut.h>
 #define DEFAULT_COLOR make_float3(0.8,0.7,0.0)
 #endif
 #include <cuda_runtime.h>
 #include <cuda_gl_interop.h>
+#include "helper_cuda.h"
+#include "helper_cuda_gl.h"
 #include "interactions.h"
-
+#include "helper_gl.h"
 #define SCALING_FACTOR 10
 
 using namespace std;
@@ -33,8 +35,8 @@ using namespace std;
  GLuint tex = 0;     // OpenGL texture object
  struct cudaGraphicsResource *cuda_pbo_resource;
 
-int screen_width = 128;
-int screen_height = 128;
+int screen_width = W;
+int screen_height = H;
 
 Ray* d_rays;
 vector<Ray> h_rays;
@@ -82,7 +84,7 @@ void initGLUT(int *argc, char **argv) {
 }
 
 void initPixelBuffer() {
-  cerr << "Hello" << endl;
+  //cerr << "Hello" << endl;
   glGenBuffers(1, &pbo);
   glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
   glBufferData(GL_PIXEL_UNPACK_BUFFER, 4*W*H*sizeof(GLubyte), 0,
@@ -144,7 +146,7 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
   }
   is.close();
 
-  float3 camera_position = make_float3(0, 0, 30);
+  float3 camera_position = make_float3(0, 30, 30);
   float3 camera_target = make_float3(0, 0, 0); //Looking down -Z axis
   float3 camera_up = make_float3(0, 1, 0);
   float camera_fovy =  45;
@@ -174,6 +176,7 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
   cudaMemcpy(d_rays,&h_rays[0],sizeof(Ray)*h_rays.size(), cudaMemcpyHostToDevice);
   cudaMemcpy(d_light,h_light,sizeof(LightSource), cudaMemcpyHostToDevice);
   cudaMemcpy(d_triangles,&h_triangles[0], sizeof(Triangle)*h_triangles.size(), cudaMemcpyHostToDevice);
+  num_triangles = h_triangles.size();
   
 }
 
@@ -192,7 +195,8 @@ void exitfunc() {
 
 int main(int argc, char** argv) {
   // printInstructions();
-  glewInit();
+  //glewInit();
+  readData("tetrahedron.obj");
   initGLUT(&argc, argv);
   gluOrtho2D(0, W, H, 0);
   glutKeyboardFunc(keyboard);
@@ -201,7 +205,6 @@ int main(int argc, char** argv) {
   glutMotionFunc(mouseDrag);
   glutDisplayFunc(display);
   initPixelBuffer();
-  readData("tetrahedron.obj");
   glutMainLoop();
   atexit(exitfunc);
   return 0;

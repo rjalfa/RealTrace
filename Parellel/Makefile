@@ -3,7 +3,7 @@ ifeq ($(UNAME_S), Darwin)
 LDFLAGS = -Xlinker -framework,OpenGL -Xlinker -framework,GLUT
 else
 LDFLAGS += -L/usr/local/cuda/samples/common/lib/linux/x86_64
-LDFLAGS += -lglut -lGL -lGLU -lGLEW
+LDFLAGS += -lglut -lGL -lGLU
 endif
 
 NVCC = /usr/local/cuda/bin/nvcc
