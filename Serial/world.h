@@ -6,18 +6,20 @@
 #include "lightsource.h"
 #include "color.h"
 #include "ray.h"
+#include "uniform-grid.h"
+
 #define RECURSION_DEPTH 30
 class World
 {
 private:
 	std::vector<Object*> objectList;
 	std::vector<LightSource*> lightSourceList;
-
 	Color ambient;
 	Color background; //Background color to shade rays that miss all objects
 	Color get_light_shade(const Vector3D& position, const Vector3D& normal, const LightSource& lightSource,const Material* mat, const Vector3D viewVector);
 
 public:
+	UniformGrid uniform_grid;
 	World():
 		objectList(0), lightSourceList(0), ambient(0), background(0)
 	{}
@@ -33,6 +35,11 @@ public:
 	{
 		objectList.push_back(obj);
 	}
+	
+	vector < Object * > getObjectList() {
+		return objectList;
+	}
+
 	float firstIntersection(Ray& ray);
 	Color shade_ray(Ray ray);
 };

@@ -2,6 +2,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+
 #define EULER_CONSTANT 2.718282
 using namespace std;
 
@@ -11,6 +12,7 @@ float World::firstIntersection(Ray& ray)
 	{
 		objectList[i]->intersect(ray);
 	}
+	// uniform_grid.intersect(ray);
 	return ray.getParameter();
 }
 

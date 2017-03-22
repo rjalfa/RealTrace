@@ -1,0 +1,2 @@
+exercise 4.5 uniform grids 	-- ref page 200
+intersectP 					-- ref page 208

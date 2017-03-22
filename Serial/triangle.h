@@ -6,6 +6,9 @@
 #include "ray.h"
 #include "vector3D.h"
 #include "color.h"
+#include "utilities.h"
+#include <cassert>
+
 #define EPSILON 1e-7
 
 class Triangle : public Object
@@ -24,5 +27,12 @@ public:
 	
 	bool intersect(Ray& r) const;
 	Vector3D getNormalAtPosition(const Vector3D& position) const;
+	BBox getWorldBound();
+	Vector3D getVertex(int i) {
+		if(i == 0) return vertexA;
+		else if(i == 1) return vertexB;
+		else if(i == 2) return vertexC;
+		else assert(false);
+	}
 };
 #endif
