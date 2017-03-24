@@ -35,7 +35,7 @@
 #include <sstream>
 #include <utility>
 
-#define SCALING_FACTOR 75
+#define SCALING_FACTOR 25
 
 //Globals
 GLuint program;
@@ -171,7 +171,7 @@ int init_resources(void)
 		fprintf(stderr, "Could not bind location: coord2d\n");
 		return 0;
 	}
-	Vector3D camera_position(0, 0, 30);
+	Vector3D camera_position(-75, 0, 30);
 	Vector3D camera_target(0, 0, 0); //Looking down -Z axis
 	Vector3D camera_up(0, 1, 0);
 	float camera_fovy =  45;
