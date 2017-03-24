@@ -36,7 +36,7 @@ public:
 		objectList.push_back(obj);
 	}
 	
-	vector < Object * > getObjectList() {
+	vector < Object * >& getObjectList() {
 		return objectList;
 	}
 

@@ -11,8 +11,9 @@ using namespace std;
 
 class Voxel {
 public:
-	vector < Triangle > primitives;
-	void addPrimitive(Triangle& p);
+	vector < int > idx;
+	vector < Triangle * > primitives;
+	void addPrimitive(Triangle * p, int i);
 
 	bool intersect(Ray& ray);
 };
@@ -39,7 +40,7 @@ private:
 
 public:
 	UniformGrid() {}
-	UniformGrid(vector < Triangle > &p);
+	UniformGrid(vector < Triangle * > &p);
 	// void free() {
 	// 	for(int i = 0; i < nv; i++)
 	// 		if(voxels[i] != NULL) delete voxels[i];

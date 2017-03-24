@@ -1,15 +1,32 @@
 #include "uniform-grid.h"
 
-void Voxel::addPrimitive(Triangle& p) {
+void Voxel::addPrimitive(Triangle * p, int i) {
+	// cout << p << endl;
+	idx.push_back(i);
 	primitives.push_back(p);
 }
 
 bool Voxel::intersect(Ray& ray) {
+	// cout << "in" << endl;
 	bool hitSomething = false;
 	for(int i = 0; i < primitives.size(); i++) {
-		if(primitives[i].intersect(ray))
+		// cerr << "this ray: " << ray.getOrigin() << " " << ray.getDirection() << endl; 
+		// cout << "---" << endl;
+		// cout << primitives[i] << endl;
+		// cout << "---" << endl;
+		// cout << idx[i] << " " << ray.getParameter() << endl;
+		if(primitives[i]->intersect(ray)) {
+			// cerr << "hit" << endl;
+			// cerr << ray.getOrigin() << " " << ray.getDirection() << " " << ray.didHit() << " " << ray.intersected() << endl;
+			// cerr << "ok" << endl;
+			// cerr << ray.getDirection() << "hit" << endl;
+			// cout << ray.getDirection() << " " << idx[i] << endl;
+			// cout << idx[i] << " " << ray.didHit() << endl;
+			ray.setIdx(idx[i]);
 			hitSomething = true;
+		}
 	}
+	// cout << "out" << endl;
 	return hitSomething;
 }
 
@@ -34,7 +51,9 @@ inline int UniformGrid::offset(double x, double y, double z) {
 	return z * nVoxels[0] * nVoxels[1] + y * nVoxels[0] + x;
 }
 
-UniformGrid::UniformGrid(vector < Triangle > &p) {
+UniformGrid::UniformGrid(vector < Triangle * > &p) {
+	// for(auto val : p)
+	// 	cout << val << endl;
 	// cerr << "in" << endl;
 	delta.resize(3);
 	nVoxels.resize(3);
@@ -46,10 +65,10 @@ UniformGrid::UniformGrid(vector < Triangle > &p) {
 		// cerr << i << ": ";
 		for(int j = 0; j < 3; j++) {
 			// cerr << j << " ";
-			BBox temp = p[i].getWorldBound();
+			BBox temp = p[i]->getWorldBound();
 			for(int axis = 0; axis < 3; axis++) {
-				bounds.axis_min[axis] = temp.axis_min[axis];
-				bounds.axis_max[axis] = temp.axis_max[axis];
+				bounds.axis_min[axis] = min(bounds.axis_min[axis], temp.axis_min[axis]);
+				bounds.axis_max[axis] = max(bounds.axis_max[axis], temp.axis_max[axis]);
 			}
 		}
 		// cerr << endl;
@@ -86,7 +105,7 @@ UniformGrid::UniformGrid(vector < Triangle > &p) {
 	// cerr << "allocated space" << endl;
 
 	for(int i = 0; i < p.size(); i++) {
-		BBox pb = p[i].getWorldBound();
+		BBox pb = p[i]->getWorldBound();
 		int vmin[3], vmax[3];
 		for(int axis = 0; axis < 3; axis++) {
 			vmin[axis] = posToVoxel(Vector3D(pb.axis_min[0], pb.axis_min[1], pb.axis_min[2]), axis);
@@ -108,17 +127,27 @@ UniformGrid::UniformGrid(vector < Triangle > &p) {
 					// 	voxels[o] = new Voxel;
 					// }
 					// voxels[o]->addPrimitive(p[i]);
-					voxels[o].addPrimitive(p[i]);
+					voxels[o].addPrimitive(p[i], i);
 				}
 			}
 		}
+		// for(int o = 0; o < nv; o++)
+		// 	voxels[o].addPrimitive(p[i], i);
 	}
+	// for(int i = 0; i < nv; i++) {
+	// 	cout << "voxel: " << i << endl;
+	// 	for(auto val : voxels[i].primitives)
+	// 		cout << val << endl;
+	// 	cout << "-------" << endl;
+	// }
 }
 
 bool UniformGrid::intersect(Ray& ray) {
 	// check ray against overall grid bounds
 	double rayT;
-	bool flag = false;
+	// cout << ray.getDirection() << endl;
+	// cerr << ray.getOrigin() << " " << ray.getDirection() << endl;
+	bool flag = true;
 	{
 		double tmin = (bounds.axis_min[0] - ray.getOrigin().X()) / ray.getDirection().X();
 		double tmax = (bounds.axis_max[0] - ray.getOrigin().X()) / ray.getDirection().X();
@@ -153,11 +182,14 @@ bool UniformGrid::intersect(Ray& ray) {
 		    tmax = tzmax; 
 
 		rayT = tmin;
-		ray.setParameter(rayT, nullptr);
+		if(flag) {
+			ray.strictSetParameter(rayT);
+		}
 	}
 
-	cerr << rayT << endl;
-	return false;
+	// cerr << rayT << endl;
+	// return false;
+	// cout << ray.getDirection() << " " << flag << endl; 
 	if(!flag) return false;
 
 	Vector3D gridIntersect = ray.getPosition();
@@ -181,15 +213,21 @@ bool UniformGrid::intersect(Ray& ray) {
 			step[axis] = -1;
 			out[axis] = -1;
 		}
+		// cerr << pos[axis] << " " << step[axis] << " " << out[axis] << endl;
 	}
 	// walk ray through voxel grid
 	bool hitSomething = false;
+	ray.strictSetParameter((FLT_MAX));
 	for( ; ; ) {
 		// check for intersection in current voxel and advance to next
 		// Voxel * voxel = voxels[offset(pos[0], pos[1], pos[2])];
 		Voxel& voxel = voxels[offset(pos[0], pos[1], pos[2])];
+		// cout << "begin" << endl;
+		// cout << ray.getDirection() << " " << hitSomething << " " << offset(pos[0], pos[1], pos[2]) << " " << ray.didHit() << endl; 
 		if(voxel.primitives.size() != 0)
 			hitSomething |= voxel.intersect(ray);
+		// cout << ray.getDirection() << " " << hitSomething << " " << offset(pos[0], pos[1], pos[2]) << " " << ray.didHit() << endl; 
+		// cout << "end" << endl;
 		// if(voxel != NULL)
 		// 	hitSomething |= voxel->intersect(ray);
 		// advance to next voxel
@@ -205,6 +243,7 @@ bool UniformGrid::intersect(Ray& ray) {
 		pos[stepAxis] += step[stepAxis];
 		if(pos[stepAxis] == out[stepAxis])
 			break;
+		if(hitSomething) break;
 		nextCrossingT[stepAxis] += deltaT[stepAxis];
 	}
 	return hitSomething;

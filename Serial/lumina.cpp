@@ -114,7 +114,7 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 	string c;
 	double v[3];
 	// Material *m1 = new Material(world);
-	vector < Triangle > all_triangles;
+	vector < Triangle * > all_triangles;
 	while(is >> c) {
 		if(c == "f") {
 			vector < int > idx[3];
@@ -137,8 +137,9 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 			// cout << idx[0][0] << " " << idx[1][0] << " " << idx[2][0] << endl;
 			Triangle * triangle = new Triangle(vertices[idx[0][0]], vertices[idx[1][0]], vertices[idx[2][0]], m);
 			// cerr << "rendered\n";
-			all_triangles.push_back(*triangle);
+			all_triangles.push_back(triangle);
 			world->addObject(triangle);
+			// cout << world->getObjectList().back() << " " << all_triangles.back() << endl;
 		} else if(c == "v") {
 			is >> v[0] >> v[1] >> v[2];
 			vertices.push_back(Vector3D(v[0]*SCALING_FACTOR, v[1]*SCALING_FACTOR, v[2]*SCALING_FACTOR));
@@ -232,7 +233,7 @@ int init_resources(void)
 	//world->addLight(light2);
 
 	// load_image_from_obj(world, "pig_triangulated.obj");
-	load_image_from_obj(world, "tetrahedron.obj");
+	load_image_from_obj(world, "bob_tri.obj");
 	engine = new RenderEngine(world, camera);
 
 	//Initialise texture
