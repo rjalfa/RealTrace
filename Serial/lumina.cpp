@@ -129,6 +129,8 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 			Material * m = NULL;
 			if(has_texture_map && idx[0].size() >= 2 && idx[1].size() >= 2 && idx[2].size() >= 2) {
 				m = new BarycentricMaterial(world,vertices[idx[0][0]], vertices[idx[1][0]], vertices[idx[2][0]],get_value_by_coordinate(imageID,texture_vertices[idx[0][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[1][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[2][1]]));
+				// m = new Material(world);
+				// m->color = get_value_by_coordinate(imageID,texture_vertices[idx[0][1]]);
 			}
 			else {
 				m = new Material(world);
@@ -169,7 +171,7 @@ int init_resources(void)
 		fprintf(stderr, "Could not bind location: coord2d\n");
 		return 0;
 	}
-	Vector3D camera_position(0, 100, 100);
+	Vector3D camera_position(0, 0, 30);
 	Vector3D camera_target(0, 0, 0); //Looking down -Z axis
 	Vector3D camera_up(0, 1, 0);
 	float camera_fovy =  45;
