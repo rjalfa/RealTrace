@@ -31,7 +31,7 @@ bool Voxel::intersect(Ray& ray) {
 }
 
 double UniformGrid::findVoxelsPerUnitDist(vector < double > delta, int num) {
-	double maxAxis = max({delta[0], delta[1], delta[2]});
+	double maxAxis = max(delta[0], max(delta[1], delta[2]));
 	double invMaxWidth = 1.0 / maxAxis;
 	double cubeRoot = 3.0 * pow(num, 1.0 / 3.0);
 	double voxelsPerUnitDist = cubeRoot * invMaxWidth;

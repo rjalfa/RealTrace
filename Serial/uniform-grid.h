@@ -5,7 +5,7 @@
 #include "triangle.h"
 #include "ray.h"
 #include "utilities.h"
-#include "Vector3D.h"
+#include "vector3D.h"
 
 using namespace std;
 

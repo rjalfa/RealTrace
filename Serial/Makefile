@@ -1,16 +1,25 @@
 # #OS X compilation flags
-CPPFLAGS=-Wno-deprecated-declarations -I.
-LDFLAGS= -framework GLUT -framework OpenGL -lstdc++ -O3 -lIL -lILU
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+  CXXFLAGS=-Wno-deprecated-declarations -I.
+  LDFLAGS= -framework GLUT -framework OpenGL -lstdc++ -O3 -lIL -lILU
+endif
+ifeq ($(UNAME_S),Linux)
+  CXXFLAGS= -std=c++14 -I.
+  LDFLAGS= -L/usr/X11R6/lib -L/usr/local/lib -lGL -lGLU -lm -lglut -lGLEW -lstdc++ -lIL -lILU
+endif
+OBJ = uniform-grid.o color.o shader_utils.o utilities.o gl_utils.o camera.o vector3D.o world.o sphere.o triangle.o plane.o cylinder.o renderengine.o ray.o material.o
+EXEC = lumina
 
-# #Linux compilation flags
-# CPPFLAGS=
-# LDFLAGS= -L/usr/X11R6/lib -L/usr/local/lib -lGL -lGLU -lm -lglut -lGLEW -lstdc++ -lIL -lILU
+all: $(EXEC)
 
-assignment05: 
-	g++ -std=c++11 -g -o assignment05 uniform-grid.cpp lumina.cpp shader_utils.cpp utilities.cpp gl_utils.cpp camera.cpp vector3D.cpp world.cpp sphere.cpp triangle.cpp plane.cpp cylinder.cpp renderengine.cpp color.cpp ray.cpp material.cpp ${CPPFLAGS} ${LDFLAGS}
+$(OBJ): %.o : %.cpp %.h
+	$(CXX) -c $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 
-uniform:
-	g++ -std=c++11 -o uniform uniform-grid.cpp triangle.cpp ray.cpp vector3D.cpp utilities.cpp ${CPPFLAGS} ${LDFLAGS}
- clean:
-	-rm -f assignment05
-.PHONY: assignment05
+$(EXEC): % : %.cpp $(OBJ)
+	$(CXX) -o $@ $(CXXFLAGS) $^ $(LDFLAGS)
+	-rm -f $(OBJ)
+
+clean:
+	-rm -f $(OBJ) $(EXEC)
+.PHONY: main
