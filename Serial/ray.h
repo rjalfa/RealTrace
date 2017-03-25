@@ -15,6 +15,7 @@ private:
 	Vector3D direction;
 	float t; //Distance travelled alogn the Ray
 	bool hit; //has the ray hit something?
+	int idx;
 	const Object *object;//The object that has been hit
 	int level;//Number of times the ray has been traced recursively
 	float refractive_index;
@@ -32,8 +33,14 @@ public:
 	Vector3D getNormal() const;
 	void setNormal(const Vector3D norm) {this->normal = norm;} 
 	float getParameter() const {return t;}
+	void strictSetParameter(const float par) {
+		t = par;
+	}
 	bool setParameter(const float par, const Object *obj);
 	bool didHit() const {return hit;}
+	void setHit(bool flag) {hit = flag;}
+	void setIdx(int i) {idx = i;}
+	int getIdx() {return idx;}
 	const Object* intersected() const {return object;}
 	int getLevel() const {return level;}
 	

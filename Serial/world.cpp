@@ -8,11 +8,15 @@ using namespace std;
 
 float World::firstIntersection(Ray& ray)
 {
-	for(int i=0; i<objectList.size(); i++)
-	{
-		objectList[i]->intersect(ray);
-	}
-	// uniform_grid.intersect(ray);
+	// for(int i=0; i<objectList.size(); i++)
+	// {	
+	// 	// cout << ray.getDirection() << " " << ray.getParameter() << endl;
+	// 	if(objectList[i]->intersect(ray)) {
+	// 		ray.setIdx(i);
+	// 		// cout << "bang:" << ray.getDirection() << " " << i << " " << ray.didHit() << " " << ray.getParameter() << endl;
+	// 	}
+	// }
+	uniform_grid.intersect(ray);
 	return ray.getParameter();
 }
 
@@ -35,6 +39,8 @@ Color World::shade_ray(Ray ray)
 	firstIntersection(ray);
 	if(ray.didHit())
 	{
+		// cout << ray.getDirection() << " " << ray.getIdx() << endl;
+		// cerr << ray.getOrigin() << " " << ray.getDirection() << " " << ray.didHit() << endl;
 		Color shadowColor(0.0,0.0,0.0);
 		bool isShadow = false;
 		//Run Shadow Test
@@ -50,6 +56,8 @@ Color World::shade_ray(Ray ray)
 		//..Compute Shade factor due to light
 		Color lightColor(0.0,0.0,0.0);
 		for(LightSource* ls : this->lightSourceList) {
+			// cerr << ray.getOrigin() << " " << ray.getDirection() << " " << ray.didHit() << " ";
+			// cerr << intersectedObject << endl;
 			lightColor = lightColor + get_light_shade(ray.getPosition(),intersectedObject->getNormalAtPosition(ray.getPosition()),*ls,intersectedObject->getMaterial(),ray.getDirection());
 		}
 		lightColor = lightColor + ambient*(intersectedObject->getMaterial()->shade(ray))*(intersectedObject->getMaterial())->ka;

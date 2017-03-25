@@ -35,7 +35,7 @@
 #include <sstream>
 #include <utility>
 
-#define SCALING_FACTOR 75
+#define SCALING_FACTOR 1
 
 //Globals
 GLuint program;
@@ -114,7 +114,7 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 	string c;
 	double v[3];
 	// Material *m1 = new Material(world);
-	vector < Triangle > all_triangles;
+	vector < Triangle * > all_triangles;
 	while(is >> c) {
 		if(c == "f") {
 			vector < int > idx[3];
@@ -128,7 +128,7 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 			}
 			Material * m = NULL;
 			if(has_texture_map && idx[0].size() >= 2 && idx[1].size() >= 2 && idx[2].size() >= 2) {
-				m = new BarycentricMaterial(world,vertices[idx[0][0]], vertices[idx[1][0]], vertices[idx[2][0]],get_value_by_coordinate(imageID,texture_vertices[idx[0][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[1][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[2][1]]));
+				m = new BarycentricMaterial(world,vertices[idx[0][0]-1], vertices[idx[1][0]-1], vertices[idx[2][0]-1],get_value_by_coordinate(imageID,texture_vertices[idx[0][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[1][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[2][1]]));
 				// m = new Material(world);
 				// m->color = get_value_by_coordinate(imageID,texture_vertices[idx[0][1]]);
 			}
@@ -137,10 +137,11 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 				init_material_from_obj(m);
 			}
 			// cout << idx[0][0] << " " << idx[1][0] << " " << idx[2][0] << endl;
-			Triangle * triangle = new Triangle(vertices[idx[0][0]], vertices[idx[1][0]], vertices[idx[2][0]], m);
+			Triangle * triangle = new Triangle(vertices[idx[0][0]-1], vertices[idx[1][0]-1], vertices[idx[2][0]-1], m);
 			// cerr << "rendered\n";
-			all_triangles.push_back(*triangle);
+			all_triangles.push_back(triangle);
 			world->addObject(triangle);
+			// cout << world->getObjectList().back() << " " << all_triangles.back() << endl;
 		} else if(c == "v") {
 			is >> v[0] >> v[1] >> v[2];
 			vertices.push_back(Vector3D(v[0]*SCALING_FACTOR, v[1]*SCALING_FACTOR, v[2]*SCALING_FACTOR));
@@ -234,10 +235,9 @@ int init_resources(void)
 	//world->addLight(light2);
 
 	// load_image_from_obj(world, "pig_triangulated.obj");
-
+	// load_image_from_obj(world, "bob_tri.obj");
+	// load_image_from_obj(world, "bs_angry.obj");
 	load_image_from_obj(world, "tetrahedron.obj");
-                   
-                      
 	engine = new RenderEngine(world, camera);
 
 	//Initialise texture
