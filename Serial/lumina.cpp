@@ -128,7 +128,7 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 			}
 			Material * m = NULL;
 			if(has_texture_map && idx[0].size() >= 2 && idx[1].size() >= 2 && idx[2].size() >= 2) {
-				m = new BarycentricMaterial(world,vertices[idx[0][0]], vertices[idx[1][0]], vertices[idx[2][0]],get_value_by_coordinate(imageID,texture_vertices[idx[0][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[1][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[2][1]]));
+				m = new BarycentricMaterial(world,vertices[idx[0][0]-1], vertices[idx[1][0]-1], vertices[idx[2][0]-1],get_value_by_coordinate(imageID,texture_vertices[idx[0][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[1][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[2][1]]));
 				// m = new Material(world);
 				// m->color = get_value_by_coordinate(imageID,texture_vertices[idx[0][1]]);
 			}
@@ -137,7 +137,7 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 				init_material_from_obj(m);
 			}
 			// cout << idx[0][0] << " " << idx[1][0] << " " << idx[2][0] << endl;
-			Triangle * triangle = new Triangle(vertices[idx[0][0]], vertices[idx[1][0]], vertices[idx[2][0]], m);
+			Triangle * triangle = new Triangle(vertices[idx[0][0]-1], vertices[idx[1][0]-1], vertices[idx[2][0]-1], m);
 			// cerr << "rendered\n";
 			all_triangles.push_back(triangle);
 			world->addObject(triangle);
