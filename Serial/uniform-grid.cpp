@@ -218,6 +218,7 @@ bool UniformGrid::intersect(Ray& ray) {
 	// walk ray through voxel grid
 	bool hitSomething = false;
 	ray.strictSetParameter((FLT_MAX));
+	// cout << "param: " << ray.getDirection() << " " << ray.getParameter() << endl;
 	for( ; ; ) {
 		// check for intersection in current voxel and advance to next
 		// Voxel * voxel = voxels[offset(pos[0], pos[1], pos[2])];
@@ -246,5 +247,6 @@ bool UniformGrid::intersect(Ray& ray) {
 		if(hitSomething) break;
 		nextCrossingT[stepAxis] += deltaT[stepAxis];
 	}
+	// cout << "hit: " << ray.getDirection() << " " << hitSomething << " " << ray.didHit() << endl;
 	return hitSomething;
 }
