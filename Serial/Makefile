@@ -8,7 +8,7 @@ ifeq ($(UNAME_S),Linux)
   CXXFLAGS= -std=c++14 -I.
   LDFLAGS= -L/usr/X11R6/lib -L/usr/local/lib -lGL -lGLU -lm -lglut -lGLEW -lstdc++ -lIL -lILU
 endif
-OBJ = uniform-grid.o color.o shader_utils.o utilities.o gl_utils.o camera.o vector3D.o world.o sphere.o triangle.o plane.o cylinder.o renderengine.o ray.o material.o
+OBJ = color.o shader_utils.o utilities.o gl_utils.o uniform-grid.o camera.o vector3D.o world.o sphere.o triangle.o plane.o cylinder.o renderengine.o ray.o material.o
 EXEC = lumina
 
 all: $(EXEC)
@@ -18,7 +18,6 @@ $(OBJ): %.o : %.cpp %.h
 
 $(EXEC): % : %.cpp $(OBJ)
 	$(CXX) -o $@ $(CXXFLAGS) $^ $(LDFLAGS)
-	-rm -f $(OBJ)
 
 clean:
 	-rm -f $(OBJ) $(EXEC)
