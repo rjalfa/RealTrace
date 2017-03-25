@@ -146,7 +146,7 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
   }
   is.close();
 
-  float3 camera_position = make_float3(0, 30, 30);
+  float3 camera_position = make_float3(0, 0, 60);
   float3 camera_target = make_float3(0, 0, 0); //Looking down -Z axis
   float3 camera_up = make_float3(0, 1, 0);
   float camera_fovy =  45;
@@ -196,7 +196,9 @@ void exitfunc() {
 int main(int argc, char** argv) {
   // printInstructions();
   //glewInit();
-  readData("tetrahedron.obj");
+string filename = "tetrahedron.obj";
+if(argc > 1) filename = string(argv[1]);  
+readData(filename);
   initGLUT(&argc, argv);
   gluOrtho2D(0, W, H, 0);
   glutKeyboardFunc(keyboard);
