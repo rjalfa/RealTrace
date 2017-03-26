@@ -1,6 +1,9 @@
 #ifndef __STRUCTURES_H
 #define __STRUCTURES_H
+#include <thrust/device_vector.h>
+
 class Triangle;
+
 struct Ray
 {
 	float3 origin;
@@ -25,6 +28,52 @@ class Triangle
 		float3 color;
 		__host__ __device__ float3 get_normal();
 		__host__ __device__ bool intersect(Ray *r);
+		__host__ __device__ BBox getWorldBound();
+};
+
+class BBox {
+public:
+	float axis_min[3], axis_max[3];
+	BBox() {
+		// GPU isn't as precise, might require changing this
+		axis_min[0] = axis_min[1] = axis_min[2] = std::numeric_limits < float >::max();
+		axis_max[0] = axis_max[1] = axis_max[2] = std::numeric_limits < float >::min();
+	}
+};
+
+class Voxel {
+public:
+	int curr_size;
+	thrust::device_vector < int > primitives;
+	__host__ __device__ void addPrimitive(Triangle * p, int i);
+	__host__ __device__ bool intersect(Ray$ ray);
+	Voxel() {
+		curr_size = 0;
+	}
+}
+
+class UniformGrid() {
+private:
+	float delta[3];
+	int nVoxels[3];
+	float voxelsPerUnitDist;
+	float width[3], invWidth[3];
+	Voxel * voxels;
+	int * voxel_sizes;
+	// thrust::device_vector < Voxel > voxels;
+
+	__host__ __device__ float findVoxelsPerUnitDist(vector < float > delta, int num);
+
+public:
+	int nv;
+	BBox bounds;
+	UniformGrid() {}
+	__host__ __device__ void initialize(vector < Triangle * > &p);
+	__host__ __device__ void buildGrid(vector < Triangle * > &p);
+	__host__ __device__ bool intersect(Ray& ray);
+	__host__ __device__ int posToVoxel(const Vector3D& pos, int axis);
+	__host__ __device__ float voxelToPos(int p, int axis);
+	__host__ __device__ inline int offset(float x, float y, float z);
 };
 
 __host__ __device__ float3 get_light_color(float3 point, float3 normal, LightSource* l, Triangle* t, float3 viewVector);
