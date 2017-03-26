@@ -19,7 +19,7 @@
 #else
 //#include <GL/glew.h>
 #include <GL/freeglut.h>
-#define DEFAULT_COLOR make_float3(0.8,0.7,0.0)
+#define DEFAULT_COLOR make_float3(0.8,0.0,0.4)
 #endif
 #include <cuda_runtime.h>
 #include <cuda_gl_interop.h>
@@ -27,7 +27,7 @@
 #include "helper_cuda_gl.h"
 #include "interactions.h"
 #include "helper_gl.h"
-#define SCALING_FACTOR 10
+#define SCALING_FACTOR 2
 
 using namespace std;
  // texture and pixel objects
@@ -54,7 +54,7 @@ void render() {
    cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0);
    // update contents of the title bar
    char title[64];
-   sprintf(title, "Stability: param = %.1f, sys = %d", param, sys);
+   sprintf(title, "RealTrace [TM] | Real-Time Raytracer | CUDA");
    glutSetWindowTitle(title);
  }
 void drawTexture() {
@@ -123,9 +123,9 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
         }
       }
       Triangle t;
-      t.vertexA = vertices[idx[0][0]];
-      t.vertexB = vertices[idx[1][0]];
-      t.vertexC = vertices[idx[2][0]];
+      t.vertexA = vertices[idx[0][0]-1];
+      t.vertexB = vertices[idx[1][0]-1];
+      t.vertexC = vertices[idx[2][0]-1];
       t.color = DEFAULT_COLOR;
       h_triangles.push_back(t);
       // cerr << "rendered\n";
@@ -146,7 +146,7 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
   }
   is.close();
 
-  float3 camera_position = make_float3(0, 0, 60);
+  float3 camera_position = make_float3(60, 60, 0);
   float3 camera_target = make_float3(0, 0, 0); //Looking down -Z axis
   float3 camera_up = make_float3(0, 1, 0);
   float camera_fovy =  45;

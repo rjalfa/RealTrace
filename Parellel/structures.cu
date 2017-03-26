@@ -116,6 +116,7 @@ __host__ __device__ bool Triangle::intersect(Ray *r)
 	float gamma = determinant(vertexA-vertexB,vertexA-r->origin,r->direction) / A;
 	float t = determinant(vertexA-vertexB,vertexA-vertexC,vertexA-r->origin) / A;
 	if(!(beta > 0.0 && gamma > 0.0 && beta+gamma < 1.0)) return false;
+	if(t < 1e-5) return false;
 	if(!r->has_intersected)	{
 		r->has_intersected = true;
 		r->t = t;

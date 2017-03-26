@@ -2,7 +2,7 @@
 #include "structures.h"
 #define TX 32
 #define TY 32
-#define AMBIENT_COLOR make_float3(0.1, 0.1, 0.5)
+#define AMBIENT_COLOR make_float3(0.8083, 1, 1)
 
 __device__
 unsigned char clip(float x){ return x > 255 ? 255 : (x < 0 ? 0 : x); }
