@@ -35,7 +35,7 @@
 #include <sstream>
 #include <utility>
 
-#define SCALING_FACTOR 1
+#define SCALING_FACTOR 10
 
 //Globals
 GLuint program;
@@ -171,7 +171,7 @@ int init_resources(void)
 		fprintf(stderr, "Could not bind location: coord2d\n");
 		return 0;
 	}
-	Vector3D camera_position(0, 0, 30);
+	Vector3D camera_position(30, 0, 0);
 	Vector3D camera_target(0, 0, 0); //Looking down -Z axis
 	Vector3D camera_up(0, 1, 0);
 	float camera_fovy =  45;
@@ -229,7 +229,7 @@ int init_resources(void)
 	// Material *m = new BarycentricMaterial(world,Vector3D(3,3,0),Vector3D(3,-3,0), Vector3D(0,0,0),Color(1.0,0.0,0.0),Color(1.0,1.0,0.0),Color(0.0,0.0,1.0));
 	// Object *tr = new Triangle(Vector3D(3,3,0),Vector3D(3,-3,0), Vector3D(0,0,0),m);
 	// world->addObject(tr);
-	LightSource *light = new PointLightSource(world, Vector3D(-10, 10, 0), Color(1, 1, 1));
+	LightSource *light = new PointLightSource(world, Vector3D(0, 30, 30), Color(0.5, 1, 1));
 	//LightSource *light2 = new PointLightSource(world, Vector3D(0, 10, 0), Color(1, 1, 1));
 	world->addLight(light);
 	//world->addLight(light2);
@@ -237,7 +237,8 @@ int init_resources(void)
 	// load_image_from_obj(world, "pig_triangulated.obj");
 	// load_image_from_obj(world, "bob_tri.obj");
 	// load_image_from_obj(world, "bs_angry.obj");
-	load_image_from_obj(world, "tetrahedron.obj");
+	// load_image_from_obj(world, "tetrahedron.obj");
+	load_image_from_obj(world, "blub_triangulated.obj");
 	engine = new RenderEngine(world, camera);
 
 	//Initialise texture

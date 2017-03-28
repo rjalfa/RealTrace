@@ -105,7 +105,7 @@ Color World::shade_ray(Ray ray)
 		else if(intersectedObject->getMaterial()->kr > 0)
 		{
 			auto R = reflect(I,N);
-			Ray reflectedRay(ray.getPosition()+ 1e-4 * R,R);
+			Ray reflectedRay(ray.getPosition()+ 1e-4 * R,R, level+1);
 			finalColor = finalColor + (intersectedObject->getMaterial()->kr)*shade_ray(reflectedRay);
 		}
 		return finalColor;
