@@ -17,8 +17,10 @@
 #include <GL/freeglut.h>
 #endif
 
+#ifndef CUDA_SERVER
 #include <IL/il.h>
 #include <IL/ilu.h>
+#endif
 
 #include "shader_utils.h"
 #include "gl_utils.h"
@@ -63,6 +65,7 @@ void init_material_from_obj(Material * m) {
 	m->n = 128;
 }
 
+#ifndef CUDA_SERVER
 Color get_value_by_coordinate(ILuint imageID, double u, double v)
 {
 	ILubyte *bytes = ilGetData();
@@ -81,6 +84,7 @@ Color get_value_by_coordinate(ILuint imageID, pair<double,double> p)
 {
 	return get_value_by_coordinate(imageID, p.first, p.second);
 }
+#endif
 
 void load_image_from_obj(World * world, string file_name, string texture_file_name = "", string occlusion_map_file_name = "") {
 	ifstream is(file_name);
@@ -91,6 +95,7 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 
 	bool has_texture_map = false;
 
+	#ifndef CUDA_SERVER
 	ILuint imageID = -1;
 		
 	if(texture_file_name != "") {
@@ -110,6 +115,7 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 		}
 		has_texture_map = true;
 	}
+	#endif
 
 	vector < Vector3D > vertices;
 	vector < Vector3D > normal_vertices;
@@ -131,15 +137,20 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 				}
 			}
 			Material * m = NULL;
+			#ifndef CUDA_SERVER
 			if(has_texture_map && idx[0].size() >= 2 && idx[1].size() >= 2 && idx[2].size() >= 2) {
 				m = new BarycentricMaterial(world,vertices[idx[0][0]-1], vertices[idx[1][0]-1], vertices[idx[2][0]-1],get_value_by_coordinate(imageID,texture_vertices[idx[0][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[1][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[2][1]]));
 				// m = new Material(world);
 				// m->color = get_value_by_coordinate(imageID,texture_vertices[idx[0][1]]);
+			
 			}
 			else {
+			#endif
 				m = new Material(world);
 				init_material_from_obj(m);
+			#ifndef CUDA_SERVER
 			}
+			#endif
 			// cout << idx[0][0] << " " << idx[1][0] << " " << idx[2][0] << endl;
 			Triangle * triangle = new Triangle(vertices[idx[0][0]-1], vertices[idx[1][0]-1], vertices[idx[2][0]-1], m);
 			// cerr << "rendered\n";
@@ -296,6 +307,7 @@ void onReshape(int width, int height) {
 	glViewport(0, 0, screen_width, screen_height);
 }
 
+#ifndef CUDA_SERVER
 void SaveImage()
 {
 	ILuint imageID = ilGenImage();
@@ -312,6 +324,7 @@ void SaveImage()
 	ilSave(IL_PNG, imageName);
 	fprintf(stderr, "Image saved as: %s\n", imageName);
 }
+#endif
 
 void onKey(unsigned char key, int x, int y)
 {
@@ -320,8 +333,10 @@ void onKey(unsigned char key, int x, int y)
 		case 27: exit(0);
 		break;
 		case 's': //Save to image
+		#ifndef CUDA_SERVER
 		case 'S': //Save to image
 			SaveImage();
+		#endif
 		break;
 		
 	}
@@ -362,7 +377,7 @@ int main(int argc, char* argv[])
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH | GLUT_MULTISAMPLE);
 	glutInitWindowSize(screen_width, screen_height);
 	glutCreateWindow("RealTrace [TM] | Real Time Ray Tracer");
-#ifndef __APPLE__
+#if !defined(__APPLE__) && !defined(CUDA_SERVER)
 	GLenum glew_status = glewInit();
 	if(glew_status != GLEW_OK)
 	{
@@ -371,8 +386,9 @@ int main(int argc, char* argv[])
 	}
 #endif
 
+	#ifndef CUDA_SERVER
 	ilInit();
-
+	#endif
 
 	/* When all init functions run without errors,
 	   the program can initialise the resources */
