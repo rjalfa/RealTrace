@@ -8,7 +8,11 @@
 #include <OpenGL/glu.h>
 #include <GLUT/glut.h>
 #else
+#ifdef CUDA_SERVER
+#include "helper_gl.h"
+#else
 #include <GL/glew.h>
+#endif
 #include <GL/glu.h>
 #include <GL/freeglut.h>
 #endif

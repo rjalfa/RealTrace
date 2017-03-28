@@ -1,3 +1,5 @@
+EXTRA=
+
 # #OS X compilation flags
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
@@ -14,10 +16,10 @@ EXEC = lumina
 all: $(EXEC)
 
 $(OBJ): %.o : %.cpp %.h
-	$(CXX) -c $(CXXFLAGS) $< -o $@ $(LDFLAGS)
+	$(CXX) -c $(CXXFLAGS) $< -o $@ $(LDFLAGS) $(EXTRA)
 
 $(EXEC): % : %.cpp $(OBJ)
-	$(CXX) -o $@ $(CXXFLAGS) $^ $(LDFLAGS)
+	$(CXX) -o $@ $(CXXFLAGS) $^ $(LDFLAGS) $(EXTRA)
 
 clean:
 	-rm -f $(OBJ) $(EXEC)

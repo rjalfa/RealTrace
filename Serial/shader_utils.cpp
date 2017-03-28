@@ -24,7 +24,7 @@ GLuint createProgram(const char *vshader_filename, const char* fshader_filename)
 	glGetProgramiv(program, GL_LINK_STATUS, &link_ok);
 	if (!link_ok) {
 		fprintf(stderr, "glLinkProgram error:");
-		printLog(program);
+		//printLog(program);
 		glDeleteShader(vs);
 		glDeleteShader(fs);
 		glDeleteProgram(program);
@@ -61,6 +61,7 @@ char* getShaderCode(const char* filename)
 }
 
 //Print error log
+/*
 void printLog(GLuint object)
 {
 	GLint log_length = 0;
@@ -83,7 +84,7 @@ void printLog(GLuint object)
 	fprintf(stderr, "%s", log);
 	free(log);
 }
-
+*/
 //Create shader object
 GLuint createShader(const char* filename, GLenum type)
 {
@@ -101,7 +102,7 @@ GLuint createShader(const char* filename, GLenum type)
 	glGetShaderiv(res, GL_COMPILE_STATUS, &compile_ok);
 	if (compile_ok == GL_FALSE) {
 		fprintf(stderr, "%s:", filename);
-		printLog(res);
+		//printLog(res);
 		glDeleteShader(res);
 		return 0;
 	}
