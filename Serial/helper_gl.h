@@ -47,6 +47,11 @@ namespace __HelperGL {
     #define USE_GL_FUNC(name, proto) extern proto name
     #endif
 
+
+    USE_GL_FUNC(glGetAttribLocation, PFNGLGETATTRIBLOCATIONPROC);
+    USE_GL_FUNC(glEnableVertexAttribArray, PFNGLENABLEVERTEXATTRIBARRAYPROC);
+    USE_GL_FUNC(glVertexAttribPointer, PFNGLVERTEXATTRIBPOINTERPROC);
+    USE_GL_FUNC(glDisableVertexAttribArray, PFNGLDISABLEVERTEXATTRIBARRAYPROC);
     USE_GL_FUNC(glBindBuffer, PFNGLBINDBUFFERPROC);
     USE_GL_FUNC(glDeleteBuffers, PFNGLDELETEBUFFERSPROC);
     USE_GL_FUNC(glBufferData, PFNGLBUFFERDATAPROC);
