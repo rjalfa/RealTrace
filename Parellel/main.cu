@@ -169,13 +169,13 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
 
   //Memcpy to GPU
 
-  cudaMalloc((void**)&d_rays, sizeof(Ray)*h_rays.size());
-  cudaMalloc((void**)&d_light, sizeof(LightSource));
-  cudaMalloc((void**)&d_triangles, sizeof(Triangle)*h_triangles.size());
-  // cudaMalloc((void**)&d_rays, sizeof(Ray)*rays.size());
-  cudaMemcpy(d_rays,&h_rays[0],sizeof(Ray)*h_rays.size(), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_light,h_light,sizeof(LightSource), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_triangles,&h_triangles[0], sizeof(Triangle)*h_triangles.size(), cudaMemcpyHostToDevice);
+  checkCudaErrors(cudaMalloc((void**)&d_rays, sizeof(Ray)*h_rays.size()));
+  checkCudaErrors(cudaMalloc((void**)&d_light, sizeof(LightSource)));
+  checkCudaErrors(cudaMalloc((void**)&d_triangles, sizeof(Triangle)*h_triangles.size()));
+  // cudaMalloc((void**)&d_rays, sizeof(Ray)*rays.size()));
+  checkCudaErrors(cudaMemcpy(d_rays,&h_rays[0],sizeof(Ray)*h_rays.size(), cudaMemcpyHostToDevice));
+  checkCudaErrors(cudaMemcpy(d_light,h_light,sizeof(LightSource), cudaMemcpyHostToDevice));
+  checkCudaErrors(cudaMemcpy(d_triangles,&h_triangles[0], sizeof(Triangle)*h_triangles.size(), cudaMemcpyHostToDevice));
   num_triangles = h_triangles.size();
   
 }
