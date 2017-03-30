@@ -1,5 +1,7 @@
 #ifndef KERNEL_H
 #define KERNEL_H
+
+#include <stdio.h>
  
 struct Ray;
 class Triangle;

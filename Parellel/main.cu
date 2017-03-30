@@ -188,9 +188,10 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
   checkCudaErrors(cudaMalloc((void**)&d_triangles, sizeof(Triangle)*h_triangles.size()));
   // cudaMalloc((void**)&d_rays, sizeof(Ray)*rays.size()));
   long long mem = sizeof(Ray)*h_rays.size() + sizeof(LightSource) + sizeof(Triangle)*h_triangles.size();
-  checkCudaErrors(cudaMemcpy(d_rays,&h_rays[0],sizeof(Ray)*h_rays.size(), cudaMemcpyHostToDevice));
+  checkCudaErrors(cudaMemcpy(d_rays,&(h_rays[0]),sizeof(Ray)*h_rays.size(), cudaMemcpyHostToDevice));
   checkCudaErrors(cudaMemcpy(d_light,h_light,sizeof(LightSource), cudaMemcpyHostToDevice));
-  checkCudaErrors(cudaMemcpy(d_triangles,&h_triangles[0], sizeof(Triangle)*h_triangles.size(), cudaMemcpyHostToDevice));
+  checkCudaErrors(cudaMemcpy(d_triangles,&(h_triangles[0]), sizeof(Triangle)*h_triangles.size(), cudaMemcpyHostToDevice));
+  cudaDeviceSynchronize();
   cerr << "[INFO] Memory to be transferred to GPU: " << mem << " B" << endl;
   num_triangles = h_triangles.size();  
   cerr << "[INFO] readData Complete" << endl;
@@ -229,6 +230,7 @@ readData(filename);
   glutMainLoop();
   );
   render();
+  cudaDeviceSynchronize();
   atexit(exitfunc);
   return 0;
 }

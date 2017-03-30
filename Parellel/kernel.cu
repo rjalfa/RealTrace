@@ -30,6 +30,7 @@ __global__ void raytrace(uchar4 *d_out, int w, int h, Ray* rays, Triangle* trian
   else get_color_from_float3(
         get_light_color( get_point(&r,r.t), r.intersected->get_normal(), l, r.intersected, r.direction)
         ,d_out+index);
+  printf("T[%d][%d][%d][%d], c=%d\n", blockIdx.x,blockIdx.y,threadIdx.x,threadIdx.y, d_out + index);
   //else get_color_from_float3()
 }
 
