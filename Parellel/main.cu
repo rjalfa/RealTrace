@@ -22,21 +22,31 @@
 #define DEFAULT_COLOR make_float3(0.8,0.0,0.4)
 #endif
 #include <cuda_runtime.h>
-#include <cuda_gl_interop.h>
 #include "helper_cuda.h"
+#ifndef _NO_OPENGL
+#include <cuda_gl_interop.h>
 #include "helper_cuda_gl.h"
 #include "interactions.h"
 #include "helper_gl.h"
+#endif
+#ifndef _NO_OPENGL
+#define OPENGL(X) X
+#else
+#define OPENGL(X) 
+#endif
+
 #define SCALING_FACTOR 2
 
 using namespace std;
  // texture and pixel objects
+OPENGL(
  GLuint pbo = 0;     // OpenGL pixel buffer object
  GLuint tex = 0;     // OpenGL texture object
  struct cudaGraphicsResource *cuda_pbo_resource;
+);
 
-int screen_width = W;
-int screen_height = H;
+int screen_width = 128;
+int screen_height = 128;
 
 Ray* d_rays;
 vector<Ray> h_rays;
@@ -48,15 +58,18 @@ Camera *camera;
 
 void render() {
    uchar4 *d_out = 0;
+   OPENGL(
    cudaGraphicsMapResources(1, &cuda_pbo_resource, 0);
-   cudaGraphicsResourceGetMappedPointer((void **)&d_out, NULL, cuda_pbo_resource);
-   kernelLauncher(d_out, W, H, d_rays, d_triangles, num_triangles, d_light);
-   cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0);
+   cudaGraphicsResourceGetMappedPointer((void **)&d_out, NULL, cuda_pbo_resource););
+   kernelLauncher(d_out, screen_width, screen_height, d_rays, d_triangles, num_triangles, d_light);
+   OPENGL(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0);
    // update contents of the title bar
    char title[64];
    sprintf(title, "RealTrace [TM] | Real-Time Raytracer | CUDA");
-   glutSetWindowTitle(title);
+   glutSetWindowTitle(title););
  }
+
+OPENGL(
 void drawTexture() {
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, W, H, 0, GL_RGBA,
                GL_UNSIGNED_BYTE, NULL);
@@ -95,6 +108,7 @@ void initPixelBuffer() {
   cudaGraphicsGLRegisterBuffer(&cuda_pbo_resource, pbo,
                                cudaGraphicsMapFlagsWriteDiscard);
 }
+)
 
 void readData(string file_name, string texture_file_name = "", string occlusion_map_file_name = "")
 {
@@ -179,14 +193,17 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
   checkCudaErrors(cudaMemcpy(d_triangles,&h_triangles[0], sizeof(Triangle)*h_triangles.size(), cudaMemcpyHostToDevice));
   cerr << "[INFO] Memory to be transferred to GPU: " << mem << " B" << endl;
   num_triangles = h_triangles.size();  
+  cerr << "[INFO] readData Complete" << endl;
 }
 
 void exitfunc() {
+  OPENGL(
   if (pbo) {
     cudaGraphicsUnregisterResource(cuda_pbo_resource);
     glDeleteBuffers(1, &pbo);
     glDeleteTextures(1, &tex);
   }
+  );
   delete h_light;
   delete camera;
   cudaFree(d_light);
@@ -197,9 +214,10 @@ void exitfunc() {
 int main(int argc, char** argv) {
   // printInstructions();
   //glewInit();
-string filename = "bob_tri.obj";
+string filename = "tetrahedron.obj";
 if(argc > 1) filename = string(argv[1]);  
 readData(filename);
+  OPENGL(
   initGLUT(&argc, argv);
   gluOrtho2D(0, W, H, 0);
   glutKeyboardFunc(keyboard);
@@ -209,6 +227,8 @@ readData(filename);
   glutDisplayFunc(display);
   initPixelBuffer();
   glutMainLoop();
+  );
+  render();
   atexit(exitfunc);
   return 0;
 }

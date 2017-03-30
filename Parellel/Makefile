@@ -1,4 +1,5 @@
 UNAME_S := $(shell uname)
+EXTRA=
 ifeq ($(UNAME_S), Darwin)
 LDFLAGS = -Xlinker -framework,OpenGL -Xlinker -framework,GLUT
 else
@@ -12,22 +13,22 @@ NVCC_FLAGS = -g -G -Xcompiler "-Wall -Wno-deprecated-declarations -Wno-deprecate
 all: main
 
 main: main.o kernel.o structures.o utilities.o camera.o
-	$(NVCC) $^ -o $@ $(LDFLAGS)
+	$(NVCC) $^ -o $@ $(LDFLAGS) $(EXTRA)
 
 main.o: main.cu kernel.h interactions.h structures.h
-	$(NVCC) $(NVCC_FLAGS) -c $< -o $@
+	$(NVCC) $(NVCC_FLAGS) -c $< -o $@ $(EXTRA)
 
 kernel.o: kernel.cu kernel.h structures.h
-	$(NVCC) $(NVCC_FLAGS) -c $< -o $@
+	$(NVCC) $(NVCC_FLAGS) -c $< -o $@ $(EXTRA)
 
 structures.o: structures.cu structures.h utilities.h
-	$(NVCC) $(NVCC_FLAGS) -c $< -o $@
+	$(NVCC) $(NVCC_FLAGS) -c $< -o $@ $(EXTRA)
 
 utilities.o: utilities.cu utilities.h
-	$(NVCC) $(NVCC_FLAGS) -c $< -o $@
+	$(NVCC) $(NVCC_FLAGS) -c $< -o $@ $(EXTRA)
 
 camera.o: camera.cu camera.h structures.h utilities.h
-	$(NVCC) $(NVCC_FLAGS) -c $< -o $@
+	$(NVCC) $(NVCC_FLAGS) -c $< -o $@ $(EXTRA)
 
 clean:
 	-rm -f main main.o kernel.o structures.o utilities.o
