@@ -45,8 +45,8 @@ OPENGL(
  struct cudaGraphicsResource *cuda_pbo_resource;
 );
 
-int screen_width = 128;
-int screen_height = 128;
+int screen_width = 512;
+int screen_height = 512;
 
 Ray* d_rays;
 vector<Ray> h_rays;
