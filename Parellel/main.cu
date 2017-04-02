@@ -35,7 +35,7 @@
 #define OPENGL(X) 
 #endif
 
-#define SCALING_FACTOR 2
+#define SCALING_FACTOR 15
 
 using namespace std;
  // texture and pixel objects
@@ -44,7 +44,7 @@ OPENGL(
  GLuint tex = 0;     // OpenGL texture object
  struct cudaGraphicsResource *cuda_pbo_resource;
 );
-
+int num_max = 10000000;
 int screen_width = 512;
 int screen_height = 512;
 
@@ -62,7 +62,7 @@ void render() {
    cudaGraphicsResourceGetMappedPointer((void **)&d_out, NULL, cuda_pbo_resource););
    kernelLauncher(d_out, screen_width, screen_height, d_camera, d_triangles, num_triangles, d_light);
    OPENGL(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0);
-   cudaDeviceSynchronize();
+   //cudaDeviceSynchronize();
    // update contents of the title bar
    char title[64];
    sprintf(title, "RealTrace [TM] | Real-Time Raytracer | CUDA");
@@ -148,7 +148,7 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
       t.vertexB = vertices[idx[1][0]-1];
       t.vertexC = vertices[idx[2][0]-1];
       t.color = DEFAULT_COLOR;
-      if(h_triangles.size() < 4u) h_triangles.push_back(t);
+      if(h_triangles.size() < num_max) h_triangles.push_back(t);
       // cerr << "rendered\n";
     } else if(c == "v") {
       is >> v[0] >> v[1] >> v[2];
@@ -213,8 +213,9 @@ void exitfunc() {
 int main(int argc, char** argv) {
   // printInstructions();
   //glewInit();
-string filename = "tetrahedron.obj";
-if(argc > 1) filename = string(argv[1]);  
+string filename = "bob_tri.obj";
+if(argc > 1) filename = string(argv[1]);
+if(argc > 2) num_max = atoi(argv[2]);  
 readData(filename);
   OPENGL(
   initGLUT(&argc, argv);
