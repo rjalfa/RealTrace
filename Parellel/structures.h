@@ -39,6 +39,7 @@ __host__ __device__ float3 operator/(const float3& v, float scalar);
 __host__ __device__ float3 operator*(const float3& v, float scalar);
 __host__ __device__ float3 operator*(float scalar, const float3& v);
 __host__ __device__ float3 operator*(const float3& v, const float3& v1);
+__host__ __device__ float3 reflect(const float3& I, const float3& N);
 __host__ __device__ float squaredlength(const float3& f);
 __host__ __device__ float length(const float3& f);
 __host__ __device__ float3 normalize(const float3& f);

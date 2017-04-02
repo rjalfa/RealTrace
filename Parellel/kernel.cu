@@ -4,6 +4,7 @@
 #define TX 32
 #define TY 32
 #define AMBIENT_COLOR make_float3(0.8083, 1, 1)
+#define KR 0.1
 
 __device__
 unsigned char clip(float x){ return x > 255 ? 255 : (x < 0 ? 0 : x); }
@@ -59,11 +60,34 @@ __global__ void raytrace(uchar4 *d_out, int w, int h, Camera* camera, Triangle* 
   r.intersected = 0;
   //Query
   intersect(triangles,num_triangles,&r);
-
-  if(!r.has_intersected) get_color_from_float3(AMBIENT_COLOR,d_out+index);
-  else get_color_from_float3(
-        get_light_color( get_point(&r,r.t), r.intersected->get_normal(), l, r.intersected, r.direction)
-        ,d_out+index);
+  
+  float3 finalColor;
+  
+  if(!r.has_intersected) finalColor = AMBIENT_COLOR;
+  else 
+  {
+  	finalColor = (1-KR) * get_light_color( get_point(&r,r.t), r.intersected->get_normal(), l, r.intersected, r.direction);
+  	float multiplier = KR;
+	float3 pos = get_point(&r,r.t);
+	float3 dir = r.direction;
+	float3 normal = r.intersected->get_normal();
+  	while(multiplier > 1e-4)
+  	{
+		r.origin = pos;//intersected point;
+  		r.direction = reflect(normalize(dir),normalize(normal));//reflect dir;
+  		r.has_intersected = false;
+  		r.t = -1;
+  		r.intersected = 0;
+  		intersect(triangles, num_triangles, &r);
+		if(!r.has_intersected) {finalColor = finalColor + multiplier * AMBIENT_COLOR; break;}
+		else finalColor = finalColor + multiplier * get_light_color( get_point(&r,r.t), r.intersected->get_normal(), l, r.intersected, r.direction);
+		pos = get_point(&r,r.t);
+		dir = r.direction;
+		normal = r.intersected->get_normal();
+		multiplier *= KR;
+	}
+  }
+  get_color_from_float3(finalColor, d_out + index);
   //printf("T[%d][%d][%d][%d], c=%d\n", blockIdx.x,blockIdx.y,threadIdx.x,threadIdx.y, d_out + index);
   //else get_color_from_float3()
 }
