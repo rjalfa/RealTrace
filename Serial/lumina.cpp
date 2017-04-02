@@ -41,7 +41,6 @@
 #include <utility>
 
 #define SCALING_FACTOR 10
-
 char* getShaderCode(const char* filename);
 void printLog(GLuint object);
 GLuint createShader(const char* filename, GLenum type);
@@ -150,7 +149,6 @@ GLuint createShader(const char* filename, GLenum type)
 }
 
 
-
 //Globals
 GLuint program;
 GLint attribute_coord2d;
@@ -167,9 +165,9 @@ void init_material_from_obj(Material * m) {
 	m->ka = 0.2;
 	m->kd = 0.9;
 	m->ks = 0.4;
-	m->kr = 0.0;
+	m->kr = 0.4;
 	m->kt = 0.0;
-	m->eta = 1.0;
+	m->eta = 3.0;
 	m->n = 128;
 }
 
@@ -245,6 +243,7 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 				}
 			}
 			Material * m = NULL;
+
 			#ifndef CUDA_SERVER
 			if(has_texture_map && idx[0].size() >= 2 && idx[1].size() >= 2 && idx[2].size() >= 2) {
 				m = new BarycentricMaterial(world,vertices[idx[0][0]-1], vertices[idx[1][0]-1], vertices[idx[2][0]-1],get_value_by_coordinate(imageID,texture_vertices[idx[0][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[1][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[2][1]]));
@@ -255,15 +254,19 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 			else {
 			#endif
 				m = new Material(world);
+				m1 = new Material(world);
 				init_material_from_obj(m);
 			#ifndef CUDA_SERVER
 			}
 			#endif
 			// cout << idx[0][0] << " " << idx[1][0] << " " << idx[2][0] << endl;
 			Triangle * triangle = new Triangle(vertices[idx[0][0]-1], vertices[idx[1][0]-1], vertices[idx[2][0]-1], m);
+			Triangle * triangle2 = new Triangle(vertices[idx[0][0]-1] + offset, vertices[idx[1][0]-1] + offset, vertices[idx[2][0]-1] + offset, m1);
 			// cerr << "rendered\n";
 			all_triangles.push_back(triangle);
+			all_triangles.push_back(triangle2);
 			world->addObject(triangle);
+			world->addObject(triangle2);
 			// cout << world->getObjectList().back() << " " << all_triangles.back() << endl;
 		} else if(c == "v") {
 			is >> v[0] >> v[1] >> v[2];
@@ -358,10 +361,10 @@ int init_resources(void)
 	//world->addLight(light2);
 
 	// load_image_from_obj(world, "pig_triangulated.obj");
-	// load_image_from_obj(world, "bob_tri.obj");
+	//load_image_from_obj(world, "bob_tri.obj");
 	// load_image_from_obj(world, "bs_angry.obj");
 	// load_image_from_obj(world, "tetrahedron.obj");
-	load_image_from_obj(world, "blub_triangulated.obj");
+load_image_from_obj(world, "blub_triangulated.obj");
 	engine = new RenderEngine(world, camera);
 
 	//Initialise texture
