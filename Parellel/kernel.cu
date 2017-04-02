@@ -2,6 +2,7 @@
 #include "structures.h"
 #include <thrust/reduce.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/tuple.h>
 
 #define TX 32
 #define TY 32
@@ -117,7 +118,7 @@ class justMax {
 public:
 	__host__ __device__
 	thrust::tuple<float, float, float> operator()(thrust::tuple<float, float, float> a, thrust::tuple<float, float, float> b) {
-		return thrust::make_tuple(max(get < 0 > (a), get < 0 > (b)), max(get < 1 > (a), get < 1 > (b)), max(get < 2 > (a), get < 2 > (b)));
+		return thrust::make_tuple(max(thrust::get < 0 > (a), thrust::get < 0 > (b)), max(thrust::get < 1 > (a), thrust::get < 1 > (b)), max(thrust::get < 2 > (a), thrust::get < 2 > (b)));
   }
 };
 
@@ -125,7 +126,7 @@ class justMin {
 public:
 	__host__ __device__
 	thrust::tuple<float, float, float> operator()(thrust::tuple<float, float, float> a, thrust::tuple<float, float, float> b) {
-		return thrust::make_tuple(min(get < 0 > (a), get < 0 > (b)), min(get < 1 > (a), get < 1 > (b)), min(get < 2 > (a), get < 2 > (b)));
+		return thrust::make_tuple(min(thrust::get < 0 > (a), thrust::get < 0 > (b)), min(thrust::get < 1 > (a), thrust::get < 1 > (b)), min(thrust::get < 2 > (a), thrust::get < 2 > (b)));
   }
 };
 
@@ -152,12 +153,12 @@ void buildGrid(int w, int h, Triangle * triangles, int num_triangles) {
 		  	 thrust::make_tuple(xmax[0], ymax[0], zmax[0]), justMax());
 
   UniformGrid h_uniform_grid;
-  h_uniform_grid.bounds.axis_min[0] = get < 0 > (axis_min);
-  h_uniform_grid.bounds.axis_min[1] = get < 1 > (axis_min);
-  h_uniform_grid.bounds.axis_min[2] = get < 2 > (axis_min);
-  h_uniform_grid.bounds.axis_max[0] = get < 0 > (axis_max);
-  h_uniform_grid.bounds.axis_max[1] = get < 1 > (axis_max);
-  h_uniform_grid.bounds.axis_max[2] = get < 2 > (axis_max);
+  h_uniform_grid.bounds.axis_min[0] = thrust::get < 0 > (axis_min);
+  h_uniform_grid.bounds.axis_min[1] = thrust::get < 1 > (axis_min);
+  h_uniform_grid.bounds.axis_min[2] = thrust::get < 2 > (axis_min);
+  h_uniform_grid.bounds.axis_max[0] = thrust::get < 0 > (axis_max);
+  h_uniform_grid.bounds.axis_max[1] = thrust::get < 1 > (axis_max);
+  h_uniform_grid.bounds.axis_max[2] = thrust::get < 2 > (axis_max);
 
   h_uniform_grid.initialize(num_triangles);
   
