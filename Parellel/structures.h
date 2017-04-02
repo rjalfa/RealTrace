@@ -29,10 +29,13 @@ struct LightSource
 class BBox {
 public:
 	float axis_min[3], axis_max[3];
+	__host__ __device__
 	BBox() {
 		// GPU isn't as precise, might require changing this
-		axis_min[0] = axis_min[1] = axis_min[2] = std::numeric_limits < float >::max();
-		axis_max[0] = axis_max[1] = axis_max[2] = std::numeric_limits < float >::min();
+//		axis_min[0] = axis_min[1] = axis_min[2] = std::numeric_limits < float >::max();
+//		axis_max[0] = axis_max[1] = axis_max[2] = std::numeric_limits < float >::min();
+		axis_min[0] = axis_min[1] = axis_min[2] = 1e36;
+		axis_max[0] = axis_max[1] = axis_max[2] = -1e36;
 	}
 };
 

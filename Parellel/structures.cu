@@ -1,6 +1,8 @@
 #include "structures.h"
 #include "utilities.h"
 
+const float SICK_FLT_MAX = 1e36;
+const float SICK_FLT_MIN = -1e36;
 __host__ __device__ bool operator==(const float3& v1, const float3& v2)
 {
 	if (v1.x != v2.x) return false;
@@ -253,8 +255,10 @@ __host__ __device__ BBox Triangle::getWorldBound() {
 }
 
 __host__ __device__ void Triangle::getWorldBound(float& xmin, float& xmax, float& ymin, float& ymax, float& zmin, float& zmax) {
-	xmin = ymin = zmin = std::numeric_limits < float >::max();
-	xmax = ymax = zmax = std::numeric_limits < float >::min();
+//	xmin = ymin = zmin = std::numeric_limits < float >::max();
+//	xmax = ymax = zmax = std::numeric_limits < float >::min();
+	xmin = ymin = zmin = SICK_FLT_MAX;
+	xmax = ymax = zmax = SICK_FLT_MIN;
 	for(int vno = 0; vno < 3; vno++) {
 		xmin = min(xmin, getVertex(vno).x);
 		xmax = max(xmax, getVertex(vno).x);
@@ -265,6 +269,13 @@ __host__ __device__ void Triangle::getWorldBound(float& xmin, float& xmax, float
 	}
 }
 
+template <typename T>
+__host__ __device__  inline void do_swap (T& a, T& b)  {
+   T x = a;
+   a = b;
+   b = x;
+}
+
 __host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) {
 	// check ray against overall grid bounds
 	float rayT;
@@ -272,12 +283,12 @@ __host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) 
 	{
 		float tmin = (bounds.axis_min[0] - ray.origin.x) / ray.direction.x;
 		float tmax = (bounds.axis_max[0] - ray.origin.x) / ray.direction.x;
-		if(tmin > tmax) swap(tmin, tmax);
+		if(tmin > tmax) do_swap(tmin, tmax);
 		 
 		float tymin = (bounds.axis_min[1] - ray.origin.y) / ray.direction.y;
 		float tymax = (bounds.axis_max[1] - ray.origin.y) / ray.direction.y;
 
-		if (tymin > tymax) swap(tymin, tymax); 
+		if (tymin > tymax) do_swap(tymin, tymax);
 
 		if ((tmin > tymax) || (tymin > tmax)) 
 		    flag = false;
@@ -291,7 +302,7 @@ __host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) 
 		float tzmin = (bounds.axis_min[2] - ray.origin.z) / ray.direction.z;
 		float tzmax = (bounds.axis_max[2] - ray.origin.z) / ray.direction.z;
 
-		if (tzmin > tzmax) swap(tzmin, tzmax); 
+		if (tzmin > tzmax) do_swap(tzmin, tzmax);
 
 		if ((tmin > tzmax) || (tzmin > tmax)) 
 		    flag = false;
@@ -360,7 +371,7 @@ __host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) 
 	}
 	// walk ray through voxel grid
 	bool hitSomething = false;
-	ray.strictSetParameter(std::numeric_limits < float >::max());
+	ray.strictSetParameter(SICK_FLT_MAX);
 	for( ; ; ) {
 		// check for intersection in current voxel and advance to next
 		// Voxel * voxel = voxels[offset(pos[0], pos[1], pos[2])];
