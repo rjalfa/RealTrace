@@ -99,13 +99,13 @@ Color World::shade_ray(Ray ray)
 			double _R0 = ((eta-1)*(eta-1))/((eta+1)*(eta+1));
 			double _R = _R0 + (1-_R0)*pow(1-c,5);
 			Ray temp1 = Ray(ray.getPosition()+ 1e-4 * R,R,level+1);
-			Ray temp2 = Ray(ray.getPosition()+ 1e-4 * T,T,level+1);
+			Ray temp2 = Ray(ray.getPosition()+ 1e-4 * T,T,level*2);
 			return k*(_R * shade_ray(temp1) + (1-_R)*shade_ray(temp2));
 		}
 		else if(intersectedObject->getMaterial()->kr > 0)
 		{
 			auto R = reflect(I,N);
-			Ray reflectedRay(ray.getPosition()+ 1e-4 * R,R);
+			Ray reflectedRay(ray.getPosition()+ 1e-4 * R,R, level + 1);
 			finalColor = finalColor + (intersectedObject->getMaterial()->kr)*shade_ray(reflectedRay);
 		}
 		return finalColor;

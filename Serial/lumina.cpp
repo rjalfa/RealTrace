@@ -35,7 +35,7 @@
 #include <sstream>
 #include <utility>
 
-#define SCALING_FACTOR 1
+#define SCALING_FACTOR 10
 
 //Globals
 GLuint program;
@@ -53,9 +53,9 @@ void init_material_from_obj(Material * m) {
 	m->ka = 0.2;
 	m->kd = 0.9;
 	m->ks = 0.4;
-	m->kr = 0.0;
+	m->kr = 0.4;
 	m->kt = 0.0;
-	m->eta = 1.0;
+	m->eta = 3.0;
 	m->n = 128;
 }
 
@@ -127,6 +127,7 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 				}
 			}
 			Material * m = NULL;
+			Material * m1 = NULL;
 			if(has_texture_map && idx[0].size() >= 2 && idx[1].size() >= 2 && idx[2].size() >= 2) {
 				m = new BarycentricMaterial(world,vertices[idx[0][0]-1], vertices[idx[1][0]-1], vertices[idx[2][0]-1],get_value_by_coordinate(imageID,texture_vertices[idx[0][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[1][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[2][1]]));
 				// m = new Material(world);
@@ -134,13 +135,20 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 			}
 			else {
 				m = new Material(world);
+				m1 = new Material(world);
 				init_material_from_obj(m);
+				init_material_from_obj(m1);
+				m1->color = Color(0.0,1.0,1.0);
 			}
+			Vector3D offset = Vector3D(0,0,15);
 			// cout << idx[0][0] << " " << idx[1][0] << " " << idx[2][0] << endl;
 			Triangle * triangle = new Triangle(vertices[idx[0][0]-1], vertices[idx[1][0]-1], vertices[idx[2][0]-1], m);
+			Triangle * triangle2 = new Triangle(vertices[idx[0][0]-1] + offset, vertices[idx[1][0]-1] + offset, vertices[idx[2][0]-1] + offset, m1);
 			// cerr << "rendered\n";
 			all_triangles.push_back(triangle);
+			all_triangles.push_back(triangle2);
 			world->addObject(triangle);
+			world->addObject(triangle2);
 			// cout << world->getObjectList().back() << " " << all_triangles.back() << endl;
 		} else if(c == "v") {
 			is >> v[0] >> v[1] >> v[2];
@@ -171,8 +179,8 @@ int init_resources(void)
 		fprintf(stderr, "Could not bind location: coord2d\n");
 		return 0;
 	}
-	Vector3D camera_position(0, 0, 30);
-	Vector3D camera_target(0, 0, 0); //Looking down -Z axis
+	Vector3D camera_position(0, 20, 30);
+	Vector3D camera_target(0, 0, 7.5); //Looking down -Z axis
 	Vector3D camera_up(0, 1, 0);
 	float camera_fovy =  45;
 	camera = new Camera(camera_position, camera_target, camera_up, camera_fovy, screen_width, screen_height);
@@ -235,9 +243,9 @@ int init_resources(void)
 	//world->addLight(light2);
 
 	// load_image_from_obj(world, "pig_triangulated.obj");
-	// load_image_from_obj(world, "bob_tri.obj");
+	load_image_from_obj(world, "bob_tri.obj");
 	// load_image_from_obj(world, "bs_angry.obj");
-	load_image_from_obj(world, "tetrahedron.obj");
+	// load_image_from_obj(world, "tetrahedron.obj");
 	engine = new RenderEngine(world, camera);
 
 	//Initialise texture
