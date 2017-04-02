@@ -19,8 +19,8 @@
 #else
 //#include <GL/glew.h>
 #include <GL/freeglut.h>
-#define DEFAULT_COLOR make_float3(0.8,0.7,0.0)
 #endif
+#define DEFAULT_COLOR make_float3(0.8,0.7,0.0)
 #include <cuda_runtime.h>
 #include <cuda_gl_interop.h>
 #include "helper_cuda.h"

@@ -17,17 +17,27 @@
 				</extensions>
 			</storageModule>
 			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
-				<configuration buildProperties="" id="com.nvidia.cuda.ide.toolchain.eight_zero.208055831" name="Default" parent="org.eclipse.cdt.build.core.emptycfg">
+				<configuration buildProperties="" description="" id="com.nvidia.cuda.ide.toolchain.eight_zero.208055831" name="Default" parent="org.eclipse.cdt.build.core.emptycfg">
 					<folderInfo id="com.nvidia.cuda.ide.toolchain.eight_zero.208055831.1140701755" name="/" resourcePath="">
 						<toolChain id="com.nvidia.cuda.ide.toolchain.eight_zero.247735495" name="CUDA Toolkit 8.0" superClass="com.nvidia.cuda.ide.toolchain.eight_zero">
 							<targetPlatform archList="all" binaryParser="com.nvidia.cuda.ide.elf;com.nvidia.cuda.ide.macho;com.nvidia.cuda.ide.cubin" id="com.nvidia.cuda.ide.targetPlatform.835203115" isAbstract="false" name="Debug Platform" osList="linux,macosx" superClass="com.nvidia.cuda.ide.targetPlatform"/>
-							<builder id="com.nvidia.cuda.ide.builder.698019904" managedBuildOn="false" name="CUDA Toolkit 8.0 Builder.Default" superClass="com.nvidia.cuda.ide.builder"/>
+							<builder id="com.nvidia.cuda.ide.builder.698019904" incrementalBuildTarget="" keepEnvironmentInBuildfile="false" managedBuildOn="false" name="CUDA Toolkit 8.0 Builder" superClass="com.nvidia.cuda.ide.builder"/>
 							<tool id="nvcc.compiler.base.398074646" name="NVCC Compiler" superClass="nvcc.compiler.base">
-								<option id="nvcc.compiler.pic.1184327961" superClass="nvcc.compiler.pic"/>
+								<option id="nvcc.compiler.pic.1184327961" name="Position Independent Code (-fPIC)" superClass="nvcc.compiler.pic"/>
+								<inputType id="nvcc.compiler.input.cu.1528464832" superClass="nvcc.compiler.input.cu"/>
+								<inputType id="nvcc.compiler.input.cpp.1697586293" superClass="nvcc.compiler.input.cpp"/>
+								<inputType id="nvcc.compiler.input.c.915368545" superClass="nvcc.compiler.input.c"/>
 							</tool>
-							<tool id="nvcc.linker.base.1337785640" name="NVCC Linker" superClass="nvcc.linker.base"/>
+							<tool id="nvcc.linker.base.1337785640" name="NVCC Linker" superClass="nvcc.linker.base">
+								<inputType id="nvcc.linker.input.718330815" superClass="nvcc.linker.input">
+									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
+									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
+								</inputType>
+							</tool>
 							<tool id="nvcc.archiver.base.171642424" name="NVCC Archiver" superClass="nvcc.archiver.base"/>
-							<tool id="com.nvidia.host.assembler.1456019712" name="Host Assembler" superClass="com.nvidia.host.assembler"/>
+							<tool id="com.nvidia.host.assembler.1456019712" name="Host Assembler" superClass="com.nvidia.host.assembler">
+								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.1341349649" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
+							</tool>
 						</toolChain>
 					</folderInfo>
 				</configuration>
@@ -46,4 +56,21 @@
 		<project id="realtrace.null.124249127" name="realtrace"/>
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
+	<storageModule moduleId="refreshScope" versionNumber="2">
+		<configuration configurationName="Default">
+			<resource resourceType="PROJECT" workspacePath="/realtrace"/>
+		</configuration>
+	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets">
+		<buildTargets>
+			<target name="main" path="Parellel" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
+				<buildCommand>make</buildCommand>
+				<buildArguments/>
+				<buildTarget>main</buildTarget>
+				<stopOnError>true</stopOnError>
+				<useDefaultCommand>true</useDefaultCommand>
+				<runAllBuilders>true</runAllBuilders>
+			</target>
+		</buildTargets>
+	</storageModule>
 </cproject>

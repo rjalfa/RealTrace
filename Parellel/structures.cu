@@ -130,25 +130,25 @@ __host__ __device__ bool Triangle::intersect(Ray *r)
 }
 
 
-__host__ __device__ void Voxel::addPrimitive(int idx, int i) {
+__host__ __device__ void Voxel::addPrimitive(int req_idx, int i) {
 	// cout << p << endl;
 	// idx.push_back(i);
 	// primitives.push_back(p);
-	primitives[idx] = i;
+	primitives[req_idx] = i;
 }
 
-__host__ __device__ bool Voxel::intersect(Ray& ray) {
+__host__ __device__ bool Voxel::intersect(Triangle * triangles, Ray& ray) {
 	bool hitSomething = false;
-	for(int i = 0; i < primitives.size(); i++) {
-		if(primitives[i]->intersect(ray)) {
-			ray.setIdx(idx[i]);
+	for(int i = 0; i < max_size; i++) {
+		if(triangles[primitives[i]].intersect(&ray)) {
+//			ray.setIdx(idx[i]);
 			hitSomething = true;
 		}
 	}
 	return hitSomething;
 }
 
-__host__ __device__ float UniformGrid::findVoxelsPerUnitDist(vector < float > delta, int num) {
+__host__ __device__ float UniformGrid::findVoxelsPerUnitDist(float delta[], int num) {
 	float maxAxis = max(delta[0], max(delta[1], delta[2]));
 	float invMaxWidth = 1.0 / maxAxis;
 	float cubeRoot = 3.0 * pow(num, 1.0 / 3.0);
@@ -156,8 +156,12 @@ __host__ __device__ float UniformGrid::findVoxelsPerUnitDist(vector < float > de
 	return voxelsPerUnitDist;
 }
 
-__host__ __device__ int UniformGrid::posToVoxel(const Vector3D& pos, int axis) {
-	int v = ((pos.e[axis] - bounds.axis_min[axis]) * invWidth[axis]);
+__host__ __device__ int UniformGrid::posToVoxel(const float3& pos, int axis) {
+	float val;
+	if(axis == 0) val = pos.x;
+	else if(axis == 2) val = pos.y;
+	else val = pos.z;
+	int v = ((val - bounds.axis_min[axis]) * invWidth[axis]);
 	return min(max(v, 0), nVoxels[axis] - 1);
 }
 
@@ -169,7 +173,7 @@ __host__ __device__ inline int UniformGrid::offset(float x, float y, float z) {
 	return z * nVoxels[0] * nVoxels[1] + y * nVoxels[0] + x;
 }
 
-__host__ __device__ void UniformGrid::initialize(int num_triangles) {
+__host__ void UniformGrid::initialize(int num_triangles) {
 	// assuming triangle objects do not require more refinements
 	
 	// for(int i = 0; i < p.size(); i++) {
@@ -207,62 +211,65 @@ __host__ __device__ void UniformGrid::initialize(int num_triangles) {
 }
 
 
-__host__ __device__ void UniformGrid::buildGrid(Triangle * p, int num_triangles) {
-
-	for(int i = 0; i < num_triangles; i++) {
-		BBox pb = p[i]->getWorldBound();
-		int vmin[3], vmax[3];
-		for(int axis = 0; axis < 3; axis++) {
-			vmin[axis] = posToVoxel(Vector3D(pb.axis_min[0], pb.axis_min[1], pb.axis_min[2]), axis);
-			vmax[axis] = posToVoxel(Vector3D(pb.axis_max[0], pb.axis_max[1], pb.axis_max[2]), axis);
-		}
-
-		for(int z = vmin[2]; z <= vmax[2]; z++) {
-			for(int y = vmin[1]; y <= vmax[1]; y++) {
-				for(int x = vmin[0]; x <= vmax[0]; x++) {
-					int o = offset(x, y, z);
-					int req_idx = atomicAdd(voxels[o]->curr_size, 1);
-					voxels[req_idx].addPrimitive(p[i], i);
-				}
-			}
-		}
-	}
-}
+//__host__ __device__ void UniformGrid::buildGrid(Triangle * p) {
+//
+//	for(int i = 0; i < num_triangles; i++) {
+//		BBox pb = p[i].getWorldBound();
+//		int vmin[3], vmax[3];
+//		for(int axis = 0; axis < 3; axis++) {
+//			vmin[axis] = posToVoxel(make_float3(pb.axis_min[0], pb.axis_min[1], pb.axis_min[2]), axis);
+//			vmax[axis] = posToVoxel(make_float3(pb.axis_max[0], pb.axis_max[1], pb.axis_max[2]), axis);
+//		}
+//
+//		for(int z = vmin[2]; z <= vmax[2]; z++) {
+//			for(int y = vmin[1]; y <= vmax[1]; y++) {
+//				for(int x = vmin[0]; x <= vmax[0]; x++) {
+//					int o = offset(x, y, z);
+//					int req_idx = atomicAdd(voxels[o].curr_size, 1);
+//					voxels[req_idx].addPrimitive(p[i], i);
+//				}
+//			}
+//		}
+//	}
+//}
 
 __host__ __device__ BBox Triangle::getWorldBound() {
 	BBox temp;
-	for(int axis = 0; axis < 3; axis++) {
-		for(int vno = 0; vno < 3; vno++) {
-			temp.axis_min[axis] = min(temp.axis_min[axis], getVertex(vno).e[axis]);
-			temp.axis_max[axis] = max(temp.axis_max[axis], getVertex(vno).e[axis]);
-		}
+	for(int vno = 0; vno < 3; vno++) {
+		temp.axis_min[0] = min(temp.axis_min[0], getVertex(vno).x);
+		temp.axis_max[0] = max(temp.axis_max[0], getVertex(vno).x);
+		temp.axis_min[1] = min(temp.axis_min[1], getVertex(vno).y);
+		temp.axis_max[1] = max(temp.axis_max[1], getVertex(vno).y);
+		temp.axis_min[2] = min(temp.axis_min[2], getVertex(vno).z);
+		temp.axis_max[2] = max(temp.axis_max[2], getVertex(vno).z);
 	}
 	return temp;
 }
 
 __host__ __device__ void Triangle::getWorldBound(float& xmin, float& xmax, float& ymin, float& ymax, float& zmin, float& zmax) {
-	
+	xmin = ymin = zmin = std::numeric_limits < float >::max();
+	xmax = ymax = zmax = std::numeric_limits < float >::min();
 	for(int vno = 0; vno < 3; vno++) {
-		xmin = min(xmin, getVertex(vno).e[0]);
-		xmax = max(xmax, getVertex(vno).e[0]);
-		ymin = min(ymin, getVertex(vno).e[1]);
-		ymax = max(ymax, getVertex(vno).e[1]);
-		zmin = min(zmin, getVertex(vno).e[2]);
-		zmax = max(zmax, getVertex(vno).e[2]);
+		xmin = min(xmin, getVertex(vno).x);
+		xmax = max(xmax, getVertex(vno).x);
+		ymin = min(ymin, getVertex(vno).y);
+		ymax = max(ymax, getVertex(vno).y);
+		zmin = min(zmin, getVertex(vno).z);
+		zmax = max(zmax, getVertex(vno).z);
 	}
 }
 
-__host__ __device__ bool UniformGrid::intersect(Ray& ray) {
+__host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) {
 	// check ray against overall grid bounds
 	float rayT;
 	bool flag = true;
 	{
-		float tmin = (bounds.axis_min[0] - ray.getOrigin().X()) / ray.getDirection().X();
-		float tmax = (bounds.axis_max[0] - ray.getOrigin().X()) / ray.getDirection().X();
+		float tmin = (bounds.axis_min[0] - ray.origin.x) / ray.direction.x;
+		float tmax = (bounds.axis_max[0] - ray.origin.x) / ray.direction.x;
 		if(tmin > tmax) swap(tmin, tmax);
 		 
-		float tymin = (bounds.axis_min[1] - ray.getOrigin().Y()) / ray.getDirection().Y(); 
-		float tymax = (bounds.axis_max[1] - ray.getOrigin().Y()) / ray.getDirection().Y(); 
+		float tymin = (bounds.axis_min[1] - ray.origin.y) / ray.direction.y;
+		float tymax = (bounds.axis_max[1] - ray.origin.y) / ray.direction.y;
 
 		if (tymin > tymax) swap(tymin, tymax); 
 
@@ -275,8 +282,8 @@ __host__ __device__ bool UniformGrid::intersect(Ray& ray) {
 		if (tymax < tmax) 
 		    tmax = tymax; 
 
-		float tzmin = (bounds.axis_min[2] - ray.getOrigin().Z()) / ray.getDirection().Z(); 
-		float tzmax = (bounds.axis_max[2] - ray.getOrigin().Z()) / ray.getDirection().Z(); 
+		float tzmin = (bounds.axis_min[2] - ray.origin.z) / ray.direction.z;
+		float tzmax = (bounds.axis_max[2] - ray.origin.z) / ray.direction.z;
 
 		if (tzmin > tzmax) swap(tzmin, tzmax); 
 
@@ -297,7 +304,7 @@ __host__ __device__ bool UniformGrid::intersect(Ray& ray) {
 
 	if(!flag) return false;
 
-	Vector3D gridIntersect = ray.getPosition();
+	float3 gridIntersect = get_point(&ray, ray.t);
 
 	int pos[3], step[3], out[3];
 	float nextCrossingT[3], deltaT[3];
@@ -305,29 +312,55 @@ __host__ __device__ bool UniformGrid::intersect(Ray& ray) {
 	for(int axis = 0; axis < 3; axis++) {
 		// compute current voxel for axis
 		pos[axis] = posToVoxel(gridIntersect, axis);
-		if(ray.getDirection().e[axis] >= 0) {
+		if(ray.direction.x >= 0) {
 			// handle ray with positive direction for voxel stepping
-			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis] + 1, axis) - gridIntersect[axis]) / ray.getDirection().e[axis];
-			deltaT[axis] = width[axis] / ray.getDirection().e[axis];
+			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis] + 1, axis) - gridIntersect.x) / ray.direction.x;
+			deltaT[axis] = width[axis] / ray.direction.x;
 			step[axis] = 1;
 			out[axis] = nVoxels[axis];
 		} else {
 			// handle ray with negative direction for voxel stepping
-			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis], axis) - gridIntersect[axis]) / ray.getDirection().e[axis];
-			deltaT[axis] = -width[axis] / ray.getDirection().e[axis];
+			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis], axis) - gridIntersect.x) / ray.direction.x;
+			deltaT[axis] = -width[axis] / ray.direction.x;
+			step[axis] = -1;
+			out[axis] = -1;
+		}
+		if(ray.direction.y >= 0) {
+			// handle ray with positive direction for voxel stepping
+			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis] + 1, axis) - gridIntersect.y) / ray.direction.y;
+			deltaT[axis] = width[axis] / ray.direction.y;
+			step[axis] = 1;
+			out[axis] = nVoxels[axis];
+		} else {
+			// handle ray with negative direction for voxel stepping
+			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis], axis) - gridIntersect.y) / ray.direction.y;
+			deltaT[axis] = -width[axis] / ray.direction.y;
+			step[axis] = -1;
+			out[axis] = -1;
+		}
+		if(ray.direction.z >= 0) {
+			// handle ray with positive direction for voxel stepping
+			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis] + 1, axis) - gridIntersect.z) / ray.direction.z;
+			deltaT[axis] = width[axis] / ray.direction.z;
+			step[axis] = 1;
+			out[axis] = nVoxels[axis];
+		} else {
+			// handle ray with negative direction for voxel stepping
+			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis], axis) - gridIntersect.z) / ray.direction.z;
+			deltaT[axis] = -width[axis] / ray.direction.z;
 			step[axis] = -1;
 			out[axis] = -1;
 		}
 	}
 	// walk ray through voxel grid
 	bool hitSomething = false;
-	ray.strictSetParameter((FLT_MAX));
+	ray.strictSetParameter(std::numeric_limits < float >::max());
 	for( ; ; ) {
 		// check for intersection in current voxel and advance to next
 		// Voxel * voxel = voxels[offset(pos[0], pos[1], pos[2])];
 		Voxel& voxel = voxels[offset(pos[0], pos[1], pos[2])];
-		if(voxel.primitives.size() != 0)
-			hitSomething |= voxel.intersect(ray);
+		if(voxel.max_size != 0)
+			hitSomething |= voxel.intersect(triangles, ray);
 		// advance to next voxel
 		// find stepAxis for stepping to next voxel
 		int bits =  ((nextCrossingT[0] < nextCrossingT[1]) << 2) +
