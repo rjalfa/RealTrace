@@ -19,6 +19,11 @@ __host__ __device__ float3 operator+(const float3& v1, const float3& v2)
 	return make_float3(v1.x+v2.x, v1.y+v2.y, v1.z+v2.z);
 }
 
+__host__ __device__ float3 operator+(const float3& v1, const double& v2)
+{
+	return make_float3(v1.x+v2, v1.y + v2, v1.z + v2);
+}
+
 __host__ __device__ float3 operator-(const float3& v1, const float3& v2)
 {
 	return make_float3(v1.x-v2.x, v1.y-v2.y, v1.z-v2.z);   
@@ -116,6 +121,7 @@ __host__ __device__ bool Triangle::intersect(Ray *r)
 	float gamma = determinant(vertexA-vertexB,vertexA-r->origin,r->direction) / A;
 	float t = determinant(vertexA-vertexB,vertexA-vertexC,vertexA-r->origin) / A;
 	if(!(beta > 0.0 && gamma > 0.0 && beta+gamma < 1.0)) return false;
+	if(t < 1e-5) return false;
 	if(!r->has_intersected)	{
 		r->has_intersected = true;
 		r->t = t;
