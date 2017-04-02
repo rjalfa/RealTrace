@@ -62,6 +62,7 @@ void render() {
    cudaGraphicsResourceGetMappedPointer((void **)&d_out, NULL, cuda_pbo_resource););
    kernelLauncher(d_out, screen_width, screen_height, d_camera, d_triangles, num_triangles, d_light);
    OPENGL(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0);
+   cudaDeviceSynchronize();
    // update contents of the title bar
    char title[64];
    sprintf(title, "RealTrace [TM] | Real-Time Raytracer | CUDA");
@@ -92,6 +93,7 @@ void display() {
   render();
   drawTexture();
   glutSwapBuffers();
+  glutPostRedisplay();
 }
 
 void initGLUT(int *argc, char **argv) {
@@ -146,7 +148,7 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
       t.vertexB = vertices[idx[1][0]-1];
       t.vertexC = vertices[idx[2][0]-1];
       t.color = DEFAULT_COLOR;
-      h_triangles.push_back(t);
+      if(h_triangles.size() < 4u) h_triangles.push_back(t);
       // cerr << "rendered\n";
     } else if(c == "v") {
       is >> v[0] >> v[1] >> v[2];
