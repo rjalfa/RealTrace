@@ -40,7 +40,7 @@ double UniformGrid::findVoxelsPerUnitDist(vector < double > delta, int num) {
 
 int UniformGrid::posToVoxel(const Vector3D& pos, int axis) {
 	int v = ((pos.e[axis] - bounds.axis_min[axis]) * invWidth[axis]);
-	return min(max(v, 0), nVoxels[axis] - 1);
+	return clamp(v, 0, nVoxels[axis] - 1);
 }
 
 float UniformGrid::voxelToPos(int p, int axis) {
@@ -85,9 +85,8 @@ UniformGrid::UniformGrid(vector < Triangle * > &p) {
 	// cerr << "voxels found: " <<  voxelsPerUnitDist << endl;
 	for(int axis = 0; axis < 3; axis++) {
 		nVoxels[axis] = ceil(delta[axis] * voxelsPerUnitDist);
-		nVoxels[axis] = max(1, nVoxels[axis]);
 		// 64 is magically determined number, lol
-		nVoxels[axis] = min(nVoxels[axis], 64);
+		nVoxels[axis] = clamp(nVoxels[axis],1,64);
 	}
 	// cerr << "voxels per axis found: " << nVoxels[0] << " " << nVoxels[1] << " " << nVoxels[2] << endl;
 

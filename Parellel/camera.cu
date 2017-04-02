@@ -27,7 +27,7 @@ Camera::~Camera()
 }
 
 //Get direction of viewing ray from pixel coordinates (i, j)
-const float3 Camera::get_ray_direction(const int i, const int j) const
+__host__ __device__ const float3 Camera::get_ray_direction(const int i, const int j) const
 {
 	float3 dir = make_float3(0.0, 0.0, 0.0);
 	dir = dir + (-w * focalDistance);
@@ -37,4 +37,23 @@ const float3 Camera::get_ray_direction(const int i, const int j) const
 	dir = dir + v * yw;
 
 	return normalize(dir);
+}
+
+void Camera::setCameraPosition(float3 pos)
+{
+	position = pos;
+	up = normalize(up);
+
+	line_of_sight = target - position;
+
+	//Calculate the camera basis vectors
+	//Camera looks down the -w axis
+	w = normalize(-line_of_sight);
+	u = normalize(crossProduct(up, w));
+	v = normalize(crossProduct(w, u));
+
+	focalHeight = 1.0; //Let's keep this fixed to 1.0
+	aspect = float(width)/float(height);
+	focalWidth = focalHeight * aspect; //Height * Aspect ratio
+	focalDistance = focalHeight/(2.0 * tan(fovy * M_PI/(180.0 * 2.0)));
 }
