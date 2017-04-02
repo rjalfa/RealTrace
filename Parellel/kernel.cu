@@ -4,7 +4,7 @@
 #define TX 32
 #define TY 32
 #define AMBIENT_COLOR make_float3(0.8083, 1, 1)
-#define KR 0.1
+#define KR 0.4
 
 __device__
 unsigned char clip(float x){ return x > 255 ? 255 : (x < 0 ? 0 : x); }
@@ -73,7 +73,7 @@ __global__ void raytrace(uchar4 *d_out, int w, int h, Camera* camera, Triangle* 
 	float3 normal = r.intersected->get_normal();
   	while(multiplier > 1e-4)
   	{
-		r.origin = pos;//intersected point;
+		r.origin = pos + 1e-4;//intersected point;
   		r.direction = reflect(normalize(dir),normalize(normal));//reflect dir;
   		r.has_intersected = false;
   		r.t = -1;
