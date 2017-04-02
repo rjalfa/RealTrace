@@ -85,8 +85,9 @@ public:
 		voxel_sizes = 0;
 		voxels = 0;
 		nv = 0;
+		voxelsPerUnitDist = 0;
 	};
-	__host__ __device__ void initialize(int num_triangles);
+	__host__ void initialize(int num_triangles);
 //	__host__ __device__ void buildGrid(Triangle * p);
 	__host__ __device__ bool intersect(Triangle * triangles, Ray& ray);
 	__host__ __device__ int posToVoxel(const float3& pos, int axis);

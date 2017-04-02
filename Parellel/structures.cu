@@ -57,7 +57,7 @@ __host__ __device__ float squaredlength(const float3& f)
 
 __host__ __device__ float length(const float3& f)
 {
-	return sqrt(squaredlength(f));
+	return sqrt((double)squaredlength(f));
 }
 
 __host__ __device__ float3 normalize(const float3& f)
@@ -86,7 +86,7 @@ __host__ __device__ float tripleProduct(const float3& v1,const float3& v2,const 
 
 __host__ __device__ float distance(const float3& v1, const float3& v2)
 {
-	return sqrt((v1.x-v2.x)*(v1.x-v2.x) + (v1.y-v2.y)*(v1.y-v2.y) + (v1.z-v2.z)*(v1.z-v2.z));
+	return sqrt(0.0L + (v1.x-v2.x)*(v1.x-v2.x) + (v1.y-v2.y)*(v1.y-v2.y) + (v1.z-v2.z)*(v1.z-v2.z));
 }
 
 __host__ __device__ float3 reflect(const float3& I, const float3& N)
@@ -111,7 +111,7 @@ __host__ __device__ float3 Triangle::get_normal()
 __host__ __device__ bool Triangle::intersect(Ray *r)
 {
 	float A = determinant(vertexA-vertexB,vertexA-vertexC,r->direction);
-	if(abs(A) < EPSILON) return false;
+	if(abs((double) A) < EPSILON) return false;
 	float beta = determinant(vertexA-r->origin,vertexA-vertexC,r->direction) / A;
 	float gamma = determinant(vertexA-vertexB,vertexA-r->origin,r->direction) / A;
 	float t = determinant(vertexA-vertexB,vertexA-vertexC,vertexA-r->origin) / A;
@@ -193,7 +193,7 @@ __host__ void UniformGrid::initialize(int num_triangles) {
 	voxelsPerUnitDist = findVoxelsPerUnitDist(delta, num_triangles);
 
 	for(int axis = 0; axis < 3; axis++) {
-		nVoxels[axis] = ceil(delta[axis] * voxelsPerUnitDist);
+		nVoxels[axis] = ceil(0.0L + delta[axis] * voxelsPerUnitDist);
 		nVoxels[axis] = max(1, nVoxels[axis]);
 		// 64 is magically determined number, lol
 		nVoxels[axis] = min(nVoxels[axis], 64);
@@ -202,7 +202,7 @@ __host__ void UniformGrid::initialize(int num_triangles) {
 	nv = 1;
 	for(int axis = 0; axis < 3; axis++) {
 		width[axis] = delta[axis] / nVoxels[axis];
-		invWidth[axis] = (width[axis] == 0.0L) ? 0.0L : 1.0 / width[axis];
+		invWidth[axis] = (width[axis] == 0.0) ? 0.0 : 1.0 / width[axis];
 		nv *= nVoxels[axis];
 	}
 
@@ -383,7 +383,7 @@ __host__ __device__ float3 get_light_color(float3 point, float3 normal, LightSou
 	float3 vLightPosition = l->position;
 	float3 n = normalize(normal);
 	float3 r = normalize(reflect(-normalize(vLightPosition-point),n));
-	float dist = distance(point,vLightPosition);
+	float dist = ::distance(point,vLightPosition);
 	//float fatt = 1.0 / (1.0 + 0.05*dist);
 	float diffuse = max(dotProduct(n,normalize(vLightPosition)),0.0f);
 	float specular = max(pow(dotProduct(normalize(viewVector),r),128),0.0);
