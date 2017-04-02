@@ -1,8 +1,4 @@
 #include "world.h"
-#include <glm/gtc/type_ptr.hpp>
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
 #define EULER_CONSTANT 2.718282
 using namespace std;
 
@@ -99,13 +95,14 @@ Color World::shade_ray(Ray ray)
 			double _R0 = ((eta-1)*(eta-1))/((eta+1)*(eta+1));
 			double _R = _R0 + (1-_R0)*pow(1-c,5);
 			Ray temp1 = Ray(ray.getPosition()+ 1e-4 * R,R,level+1);
-			Ray temp2 = Ray(ray.getPosition()+ 1e-4 * T,T,level+1);
+			Ray temp2 = Ray(ray.getPosition()+ 1e-4 * T,T,level*2);
 			return k*(_R * shade_ray(temp1) + (1-_R)*shade_ray(temp2));
 		}
 		else if(intersectedObject->getMaterial()->kr > 0)
 		{
 			auto R = reflect(I,N);
-			Ray reflectedRay(ray.getPosition()+ 1e-4 * R,R);
+			Ray reflectedRay(ray.getPosition()+ 1e-4 * R,R, level + 1);
+
 			finalColor = finalColor + (intersectedObject->getMaterial()->kr)*shade_ray(reflectedRay);
 		}
 		return finalColor;
@@ -113,20 +110,29 @@ Color World::shade_ray(Ray ray)
 	return background;
 }
 
+Vector3D normalize(const Vector3D& v1)
+{
+	Vector3D v2(v1);
+	v2.normalize();
+	return v2;
+}
+
+float distance(const Vector3D& v1, const Vector3D& v2)
+{
+	return sqrt((v1.X()-v2.X())*(v1.X()-v2.X()) + (v1.Y()-v2.Y())*(v1.Y()-v2.Y()) + (v1.Z()-v2.Z())*(v1.Z()-v2.Z()));
+}
+
 //Returns Sum of diffuse and specular reflections at position due to light source.
 Color World::get_light_shade(const Vector3D& position, const Vector3D& normal, const LightSource& lightSource,const Material* mat, const Vector3D viewVector)
 {
-	using namespace glm;
-	vec3 vNormal = vec3(normal.X(),normal.Y(),normal.Z());
-	vec3 vVertex = vec3(position.X(),position.Y(),position.Z());
-	vec3 vLightPosition = vec3(lightSource.getPosition().X(),lightSource.getPosition().Y(),lightSource.getPosition().Z());
-	vec3 vViewVector = vec3(viewVector.X(),viewVector.Y(),viewVector.Z());
-	vec3 n = normalize(vNormal);
-	vec3 r = normalize(reflect(-normalize(vLightPosition-vVertex),n));
-	float dist = distance(vVertex,vLightPosition);
-	float fatt = 1.0 / (1.0 + 0.05*dist);
-	float diffuse = std::max(dot(n,normalize(vLightPosition)),0.0f);
-	float specular = std::max(std::pow(dot(normalize(vViewVector),r),mat->n),0.0);
+	Vector3D vLightPosition = lightSource.getPosition();
+	Vector3D n = normalize(normal);
+	Vector3D r = normalize(reflect(-normalize(vLightPosition-position),n));
+	float dist = distance(position,vLightPosition);
+	//float fatt = 1.0 / (1.0 + 0.05*dist);
+	float diffuse = max(dotProduct(n,normalize(vLightPosition)),0.0);
+	float specular = max(pow(dotProduct(normalize(viewVector),r),128),0.0);
+
 	return (mat->kd)*diffuse*(lightSource.getIntensity())*(mat->shade(Ray(position,viewVector))) + (mat->ks)*specular*(lightSource.getIntensity());
 }
 

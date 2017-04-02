@@ -17,4 +17,12 @@ public:
 	}
 };
 
+template<class T>
+T clamp(T a, T b, const T c)
+{
+	if(a > c) return c;
+	if(a < b) return b;
+	return a;
+}
+
 #endif

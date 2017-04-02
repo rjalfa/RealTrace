@@ -8,15 +8,20 @@
 #include <OpenGL/glu.h>
 #include <GLUT/glut.h>
 #else
+#ifdef CUDA_SERVER
+#include "helper_gl.h"
+#else
 #include <GL/glew.h>
+#endif
 #include <GL/glu.h>
 #include <GL/freeglut.h>
 #endif
 
+#ifndef CUDA_SERVER
 #include <IL/il.h>
 #include <IL/ilu.h>
+#endif
 
-#include "shader_utils.h"
 #include "gl_utils.h"
 
 #include "camera.h"
@@ -35,7 +40,114 @@
 #include <sstream>
 #include <utility>
 
-#define SCALING_FACTOR 1
+#define SCALING_FACTOR 10
+char* getShaderCode(const char* filename);
+void printLog(GLuint object);
+GLuint createShader(const char* filename, GLenum type);
+
+
+GLuint createProgram(const char *vshader_filename, const char* fshader_filename)
+{
+	//Create shader objects
+	GLuint vs, fs;
+	if ((vs = createShader(vshader_filename, GL_VERTEX_SHADER))   == 0) return 0;
+	if ((fs = createShader(fshader_filename, GL_FRAGMENT_SHADER)) == 0) return 0;
+
+	//Creare program object and link shader objects
+	GLuint program = glCreateProgram();
+	glAttachShader(program, vs);
+	glAttachShader(program, fs);
+	glLinkProgram(program);
+	GLint link_ok;
+	glGetProgramiv(program, GL_LINK_STATUS, &link_ok);
+	if (!link_ok) {
+		fprintf(stderr, "glLinkProgram error:");
+		//printLog(program);
+		glDeleteShader(vs);
+		glDeleteShader(fs);
+		glDeleteProgram(program);
+		return 0;
+	}
+
+	return program;
+}
+
+//Read shader source as a string
+char* getShaderCode(const char* filename)
+{
+	FILE* input = fopen(filename, "rb");
+	if(input == NULL) return NULL;
+
+	if(fseek(input, 0, SEEK_END) == -1) return NULL;
+	long size = ftell(input);
+	if(size == -1) return NULL;
+	if(fseek(input, 0, SEEK_SET) == -1) return NULL;
+
+	/*if using c-compiler: dont cast malloc's return value*/
+	char *content = (char*) malloc( (size_t) size +1  ); 
+	if(content == NULL) return NULL;
+
+	fread(content, 1, (size_t)size, input);
+	if(ferror(input)) {
+		free(content);
+		return NULL;
+	}
+
+	fclose(input);
+	content[size] = '\0';
+	return content;
+}
+
+//Print error log
+/*
+void printLog(GLuint object)
+{
+	GLint log_length = 0;
+	if (glIsShader(object))
+		glGetShaderiv(object, GL_INFO_LOG_LENGTH, &log_length);
+	else if (glIsProgram(object))
+		glGetProgramiv(object, GL_INFO_LOG_LENGTH, &log_length);
+	else {
+		fprintf(stderr, "printlog: Not a shader or a program\n");
+		return;
+	}
+
+	char* log = (char*)malloc(log_length);
+
+	if (glIsShader(object))
+		glGetShaderInfoLog(object, log_length, NULL, log);
+	else if (glIsProgram(object))
+		glGetProgramInfoLog(object, log_length, NULL, log);
+
+	fprintf(stderr, "%s", log);
+	free(log);
+}
+*/
+//Create shader object
+GLuint createShader(const char* filename, GLenum type)
+{
+	const GLchar* source = getShaderCode(filename);
+	if (source == NULL) {
+		fprintf(stderr, "Error opening %s: ", filename); perror("");
+		return 0;
+	}
+	GLuint res = glCreateShader(type);
+	glShaderSource(res, 1, &source, NULL);
+	free((void*)source);
+
+	glCompileShader(res);
+	GLint compile_ok = GL_FALSE;
+	glGetShaderiv(res, GL_COMPILE_STATUS, &compile_ok);
+	if (compile_ok == GL_FALSE) {
+		fprintf(stderr, "%s:", filename);
+		//printLog(res);
+		glDeleteShader(res);
+		return 0;
+	}
+
+	return res;
+}
+
 
 //Globals
 GLuint program;
@@ -53,12 +165,13 @@ void init_material_from_obj(Material * m) {
 	m->ka = 0.2;
 	m->kd = 0.9;
 	m->ks = 0.4;
-	m->kr = 0.0;
+	m->kr = 0.4;
 	m->kt = 0.0;
-	m->eta = 1.0;
+	m->eta = 3.0;
 	m->n = 128;
 }
 
+#ifndef CUDA_SERVER
 Color get_value_by_coordinate(ILuint imageID, double u, double v)
 {
 	ILubyte *bytes = ilGetData();
@@ -77,6 +190,7 @@ Color get_value_by_coordinate(ILuint imageID, pair<double,double> p)
 {
 	return get_value_by_coordinate(imageID, p.first, p.second);
 }
+#endif
 
 void load_image_from_obj(World * world, string file_name, string texture_file_name = "", string occlusion_map_file_name = "") {
 	ifstream is(file_name);
@@ -87,6 +201,7 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 
 	bool has_texture_map = false;
 
+	#ifndef CUDA_SERVER
 	ILuint imageID = -1;
 		
 	if(texture_file_name != "") {
@@ -106,6 +221,7 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 		}
 		has_texture_map = true;
 	}
+	#endif
 
 	vector < Vector3D > vertices;
 	vector < Vector3D > normal_vertices;
@@ -127,20 +243,30 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 				}
 			}
 			Material * m = NULL;
+
+			#ifndef CUDA_SERVER
 			if(has_texture_map && idx[0].size() >= 2 && idx[1].size() >= 2 && idx[2].size() >= 2) {
 				m = new BarycentricMaterial(world,vertices[idx[0][0]-1], vertices[idx[1][0]-1], vertices[idx[2][0]-1],get_value_by_coordinate(imageID,texture_vertices[idx[0][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[1][1]]),get_value_by_coordinate(imageID,texture_vertices[idx[2][1]]));
 				// m = new Material(world);
 				// m->color = get_value_by_coordinate(imageID,texture_vertices[idx[0][1]]);
+			
 			}
 			else {
+			#endif
 				m = new Material(world);
+				m1 = new Material(world);
 				init_material_from_obj(m);
+			#ifndef CUDA_SERVER
 			}
+			#endif
 			// cout << idx[0][0] << " " << idx[1][0] << " " << idx[2][0] << endl;
 			Triangle * triangle = new Triangle(vertices[idx[0][0]-1], vertices[idx[1][0]-1], vertices[idx[2][0]-1], m);
+			Triangle * triangle2 = new Triangle(vertices[idx[0][0]-1] + offset, vertices[idx[1][0]-1] + offset, vertices[idx[2][0]-1] + offset, m1);
 			// cerr << "rendered\n";
 			all_triangles.push_back(triangle);
+			all_triangles.push_back(triangle2);
 			world->addObject(triangle);
+			world->addObject(triangle2);
 			// cout << world->getObjectList().back() << " " << all_triangles.back() << endl;
 		} else if(c == "v") {
 			is >> v[0] >> v[1] >> v[2];
@@ -171,7 +297,7 @@ int init_resources(void)
 		fprintf(stderr, "Could not bind location: coord2d\n");
 		return 0;
 	}
-	Vector3D camera_position(0, 0, 30);
+	Vector3D camera_position(30, 0, 0);
 	Vector3D camera_target(0, 0, 0); //Looking down -Z axis
 	Vector3D camera_up(0, 1, 0);
 	float camera_fovy =  45;
@@ -229,15 +355,16 @@ int init_resources(void)
 	// Material *m = new BarycentricMaterial(world,Vector3D(3,3,0),Vector3D(3,-3,0), Vector3D(0,0,0),Color(1.0,0.0,0.0),Color(1.0,1.0,0.0),Color(0.0,0.0,1.0));
 	// Object *tr = new Triangle(Vector3D(3,3,0),Vector3D(3,-3,0), Vector3D(0,0,0),m);
 	// world->addObject(tr);
-	LightSource *light = new PointLightSource(world, Vector3D(-10, 10, 0), Color(1, 1, 1));
+	LightSource *light = new PointLightSource(world, Vector3D(0, 30, 30), Color(0.5, 1, 1));
 	//LightSource *light2 = new PointLightSource(world, Vector3D(0, 10, 0), Color(1, 1, 1));
 	world->addLight(light);
 	//world->addLight(light2);
 
 	// load_image_from_obj(world, "pig_triangulated.obj");
-	// load_image_from_obj(world, "bob_tri.obj");
+	//load_image_from_obj(world, "bob_tri.obj");
 	// load_image_from_obj(world, "bs_angry.obj");
-	load_image_from_obj(world, "tetrahedron.obj");
+	// load_image_from_obj(world, "tetrahedron.obj");
+load_image_from_obj(world, "blub_triangulated.obj");
 	engine = new RenderEngine(world, camera);
 
 	//Initialise texture
@@ -291,6 +418,7 @@ void onReshape(int width, int height) {
 	glViewport(0, 0, screen_width, screen_height);
 }
 
+#ifndef CUDA_SERVER
 void SaveImage()
 {
 	ILuint imageID = ilGenImage();
@@ -307,6 +435,7 @@ void SaveImage()
 	ilSave(IL_PNG, imageName);
 	fprintf(stderr, "Image saved as: %s\n", imageName);
 }
+#endif
 
 void onKey(unsigned char key, int x, int y)
 {
@@ -315,8 +444,10 @@ void onKey(unsigned char key, int x, int y)
 		case 27: exit(0);
 		break;
 		case 's': //Save to image
+		#ifndef CUDA_SERVER
 		case 'S': //Save to image
 			SaveImage();
+		#endif
 		break;
 		
 	}
@@ -357,7 +488,7 @@ int main(int argc, char* argv[])
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH | GLUT_MULTISAMPLE);
 	glutInitWindowSize(screen_width, screen_height);
 	glutCreateWindow("RealTrace [TM] | Real Time Ray Tracer");
-#ifndef __APPLE__
+#if !defined(__APPLE__) && !defined(CUDA_SERVER)
 	GLenum glew_status = glewInit();
 	if(glew_status != GLEW_OK)
 	{
@@ -366,8 +497,9 @@ int main(int argc, char* argv[])
 	}
 #endif
 
+	#ifndef CUDA_SERVER
 	ilInit();
-
+	#endif
 
 	/* When all init functions run without errors,
 	   the program can initialise the resources */

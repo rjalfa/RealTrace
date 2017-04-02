@@ -1,5 +1,5 @@
-#ifndef _CYLINDER_H_
-#define _CYLINDER_H_
+#ifndef _UNIFORM_GRID_H_
+#define _UNIFORM_GRID_H_
 
 #include <vector>
 #include "triangle.h"

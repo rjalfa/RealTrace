@@ -22,41 +22,54 @@
 #endif
 #define DEFAULT_COLOR make_float3(0.8,0.7,0.0)
 #include <cuda_runtime.h>
-#include <cuda_gl_interop.h>
 #include "helper_cuda.h"
+#ifndef _NO_OPENGL
+#include <cuda_gl_interop.h>
 #include "helper_cuda_gl.h"
 #include "interactions.h"
 #include "helper_gl.h"
-#define SCALING_FACTOR 10
+#endif
+#ifndef _NO_OPENGL
+#define OPENGL(X) X
+#else
+#define OPENGL(X) 
+#endif
+
+#define SCALING_FACTOR 2
 
 using namespace std;
  // texture and pixel objects
+OPENGL(
  GLuint pbo = 0;     // OpenGL pixel buffer object
  GLuint tex = 0;     // OpenGL texture object
  struct cudaGraphicsResource *cuda_pbo_resource;
+);
+int num_max = 10000000;
+int screen_width = 512;
+int screen_height = 512;
 
-int screen_width = W;
-int screen_height = H;
 
-Ray* d_rays;
-vector<Ray> h_rays;
 Triangle* d_triangles;
 std::vector<Triangle> h_triangles;
 LightSource* d_light, *h_light;
 int num_triangles;
-Camera *camera;
+Camera *h_camera = NULL,*d_camera = NULL;
 
 void render() {
    uchar4 *d_out = 0;
+   OPENGL(
    cudaGraphicsMapResources(1, &cuda_pbo_resource, 0);
-   cudaGraphicsResourceGetMappedPointer((void **)&d_out, NULL, cuda_pbo_resource);
-   kernelLauncher(d_out, W, H, d_rays, d_triangles, num_triangles, d_light);
-   cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0);
+   cudaGraphicsResourceGetMappedPointer((void **)&d_out, NULL, cuda_pbo_resource););
+   kernelLauncher(d_out, screen_width, screen_height, d_camera, d_triangles, num_triangles, d_light);
+   OPENGL(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0);
+   //cudaDeviceSynchronize();
    // update contents of the title bar
    char title[64];
-   sprintf(title, "Stability: param = %.1f, sys = %d", param, sys);
-   glutSetWindowTitle(title);
+   sprintf(title, "RealTrace [TM] | Real-Time Raytracer | CUDA");
+   glutSetWindowTitle(title););
  }
+
+OPENGL(
 void drawTexture() {
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, W, H, 0, GL_RGBA,
                GL_UNSIGNED_BYTE, NULL);
@@ -69,11 +82,18 @@ void drawTexture() {
   glEnd();
   glDisable(GL_TEXTURE_2D);
 }
-
+int theta = 0;
 void display() {
+  //fprintf(stderr,"Reder Func\n");
+  theta = (theta + 10)%360;
+  float3 camera_position = make_float3(60*cos((theta * 3.141592)/180.0), 60*sin((theta * 3.141592)/180.0), 0);
+  //printf("Camera Add: %p\n", h_camera);
+  h_camera->setCameraPosition(camera_position);
+  checkCudaErrors(cudaMemcpy(d_camera,h_camera,sizeof(Camera), cudaMemcpyHostToDevice));
   render();
   drawTexture();
   glutSwapBuffers();
+  glutPostRedisplay();
 }
 
 void initGLUT(int *argc, char **argv) {
@@ -95,6 +115,7 @@ void initPixelBuffer() {
   cudaGraphicsGLRegisterBuffer(&cuda_pbo_resource, pbo,
                                cudaGraphicsMapFlagsWriteDiscard);
 }
+)
 
 void readData(string file_name, string texture_file_name = "", string occlusion_map_file_name = "")
 {
@@ -123,11 +144,11 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
         }
       }
       Triangle t;
-      t.vertexA = vertices[idx[0][0]];
-      t.vertexB = vertices[idx[1][0]];
-      t.vertexC = vertices[idx[2][0]];
+      t.vertexA = vertices[idx[0][0]-1];
+      t.vertexB = vertices[idx[1][0]-1];
+      t.vertexC = vertices[idx[2][0]-1];
       t.color = DEFAULT_COLOR;
-      h_triangles.push_back(t);
+      if(h_triangles.size() < static_cast<unsigned int>(num_max)) h_triangles.push_back(t);
       // cerr << "rendered\n";
     } else if(c == "v") {
       is >> v[0] >> v[1] >> v[2];
@@ -146,21 +167,12 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
   }
   is.close();
 
-  float3 camera_position = make_float3(0, 0, 60);
+  float3 camera_position = make_float3(60, 60, 0);
   float3 camera_target = make_float3(0, 0, 0); //Looking down -Z axis
-  float3 camera_up = make_float3(0, 1, 0);
+  float3 camera_up = make_float3(0, 0, 1);
   float camera_fovy =  45;
-  Camera* camera = new Camera(camera_position, camera_target, camera_up, camera_fovy, screen_width, screen_height);
+  h_camera = new Camera(camera_position, camera_target, camera_up, camera_fovy, screen_width, screen_height);
   
-  //Create Ray array
-  for(int i = 0; i < screen_width; i ++) for(int j = 0; j < screen_height; j ++)
-  {
-    float3 ray_dir = camera->get_ray_direction(i, j);
-    Ray ray;
-    ray.origin = camera->get_position();
-    ray.direction = ray_dir;
-    h_rays.push_back(ray);
-  }
 
   //Create Light Source
   h_light = new LightSource;
@@ -169,36 +181,43 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
 
   //Memcpy to GPU
 
-  cudaMalloc((void**)&d_rays, sizeof(Ray)*h_rays.size());
-  cudaMalloc((void**)&d_light, sizeof(LightSource));
-  cudaMalloc((void**)&d_triangles, sizeof(Triangle)*h_triangles.size());
-  // cudaMalloc((void**)&d_rays, sizeof(Ray)*rays.size());
-  cudaMemcpy(d_rays,&h_rays[0],sizeof(Ray)*h_rays.size(), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_light,h_light,sizeof(LightSource), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_triangles,&h_triangles[0], sizeof(Triangle)*h_triangles.size(), cudaMemcpyHostToDevice);
-  num_triangles = h_triangles.size();
-  
+  checkCudaErrors(cudaMalloc((void**)&d_light, sizeof(LightSource)));
+  checkCudaErrors(cudaMalloc((void**)&d_triangles, sizeof(Triangle)*h_triangles.size()));
+  checkCudaErrors(cudaMalloc((void**)&d_camera, sizeof(Camera)));
+  // cudaMalloc((void**)&d_rays, sizeof(Ray)*rays.size()));
+  long long mem = sizeof(Camera) + sizeof(LightSource) + sizeof(Triangle)*h_triangles.size();
+  checkCudaErrors(cudaMemcpy(d_camera,h_camera,sizeof(Camera), cudaMemcpyHostToDevice));
+  checkCudaErrors(cudaMemcpy(d_light,h_light,sizeof(LightSource), cudaMemcpyHostToDevice));
+  checkCudaErrors(cudaMemcpy(d_triangles,&(h_triangles[0]), sizeof(Triangle)*h_triangles.size(), cudaMemcpyHostToDevice));
+  //cudaDeviceSynchronize();
+  cerr << "[INFO] Memory to be transferred to GPU: " << mem << " B" << endl;
+  num_triangles = h_triangles.size();  
+  cerr << "[INFO] readData Complete" << endl;
 }
 
 void exitfunc() {
+  OPENGL(
   if (pbo) {
     cudaGraphicsUnregisterResource(cuda_pbo_resource);
     glDeleteBuffers(1, &pbo);
     glDeleteTextures(1, &tex);
   }
+  );
   delete h_light;
-  delete camera;
+  delete h_camera;
   cudaFree(d_light);
   cudaFree(d_triangles);
-  cudaFree(d_rays);
+  cudaFree(d_camera);
 }
 
 int main(int argc, char** argv) {
   // printInstructions();
   //glewInit();
-string filename = "tetrahedron.obj";
-if(argc > 1) filename = string(argv[1]);  
+string filename = "bob_tri.obj";
+if(argc > 1) filename = string(argv[1]);
+if(argc > 2) num_max = atoi(argv[2]);  
 readData(filename);
+  OPENGL(
   initGLUT(&argc, argv);
   gluOrtho2D(0, W, H, 0);
   glutKeyboardFunc(keyboard);
@@ -208,6 +227,11 @@ readData(filename);
   glutDisplayFunc(display);
   initPixelBuffer();
   glutMainLoop();
+  );
+  #ifdef _NO_OPENGL
+  render();
+  cudaDeviceSynchronize();
+  #endif
   atexit(exitfunc);
   return 0;
 }
