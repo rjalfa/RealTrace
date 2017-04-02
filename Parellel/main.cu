@@ -48,20 +48,19 @@ OPENGL(
 int screen_width = 512;
 int screen_height = 512;
 
-Ray* d_rays;
-vector<Ray> h_rays;
+
 Triangle* d_triangles;
 std::vector<Triangle> h_triangles;
 LightSource* d_light, *h_light;
 int num_triangles;
-Camera *camera;
+Camera *h_camera = NULL,*d_camera = NULL;
 
 void render() {
    uchar4 *d_out = 0;
    OPENGL(
    cudaGraphicsMapResources(1, &cuda_pbo_resource, 0);
    cudaGraphicsResourceGetMappedPointer((void **)&d_out, NULL, cuda_pbo_resource););
-   kernelLauncher(d_out, screen_width, screen_height, d_rays, d_triangles, num_triangles, d_light);
+   kernelLauncher(d_out, screen_width, screen_height, d_camera, d_triangles, num_triangles, d_light);
    OPENGL(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0);
    // update contents of the title bar
    char title[64];
@@ -82,8 +81,14 @@ void drawTexture() {
   glEnd();
   glDisable(GL_TEXTURE_2D);
 }
-
+int theta = 0;
 void display() {
+  //fprintf(stderr,"Reder Func\n");
+  theta = (theta + 10)%360;
+  float3 camera_position = make_float3(60*cos((theta * 3.141592)/180.0), 60*sin((theta * 3.141592)/180.0), 0);
+  //printf("Camera Add: %p\n", h_camera);
+  h_camera->setCameraPosition(camera_position);
+  checkCudaErrors(cudaMemcpy(d_camera,h_camera,sizeof(Camera), cudaMemcpyHostToDevice));
   render();
   drawTexture();
   glutSwapBuffers();
@@ -162,19 +167,10 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
 
   float3 camera_position = make_float3(60, 60, 0);
   float3 camera_target = make_float3(0, 0, 0); //Looking down -Z axis
-  float3 camera_up = make_float3(0, 1, 0);
+  float3 camera_up = make_float3(0, 0, 1);
   float camera_fovy =  45;
-  Camera* camera = new Camera(camera_position, camera_target, camera_up, camera_fovy, screen_width, screen_height);
+  h_camera = new Camera(camera_position, camera_target, camera_up, camera_fovy, screen_width, screen_height);
   
-  //Create Ray array
-  for(int i = 0; i < screen_width; i ++) for(int j = 0; j < screen_height; j ++)
-  {
-    float3 ray_dir = camera->get_ray_direction(i, j);
-    Ray ray;
-    ray.origin = camera->get_position();
-    ray.direction = ray_dir;
-    h_rays.push_back(ray);
-  }
 
   //Create Light Source
   h_light = new LightSource;
@@ -183,15 +179,15 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
 
   //Memcpy to GPU
 
-  checkCudaErrors(cudaMalloc((void**)&d_rays, sizeof(Ray)*h_rays.size()));
   checkCudaErrors(cudaMalloc((void**)&d_light, sizeof(LightSource)));
   checkCudaErrors(cudaMalloc((void**)&d_triangles, sizeof(Triangle)*h_triangles.size()));
+  checkCudaErrors(cudaMalloc((void**)&d_camera, sizeof(Camera)));
   // cudaMalloc((void**)&d_rays, sizeof(Ray)*rays.size()));
-  long long mem = sizeof(Ray)*h_rays.size() + sizeof(LightSource) + sizeof(Triangle)*h_triangles.size();
-  checkCudaErrors(cudaMemcpy(d_rays,&(h_rays[0]),sizeof(Ray)*h_rays.size(), cudaMemcpyHostToDevice));
+  long long mem = sizeof(Camera) + sizeof(LightSource) + sizeof(Triangle)*h_triangles.size();
+  checkCudaErrors(cudaMemcpy(d_camera,h_camera,sizeof(Camera), cudaMemcpyHostToDevice));
   checkCudaErrors(cudaMemcpy(d_light,h_light,sizeof(LightSource), cudaMemcpyHostToDevice));
   checkCudaErrors(cudaMemcpy(d_triangles,&(h_triangles[0]), sizeof(Triangle)*h_triangles.size(), cudaMemcpyHostToDevice));
-  cudaDeviceSynchronize();
+  //cudaDeviceSynchronize();
   cerr << "[INFO] Memory to be transferred to GPU: " << mem << " B" << endl;
   num_triangles = h_triangles.size();  
   cerr << "[INFO] readData Complete" << endl;
@@ -206,10 +202,10 @@ void exitfunc() {
   }
   );
   delete h_light;
-  delete camera;
+  delete h_camera;
   cudaFree(d_light);
   cudaFree(d_triangles);
-  cudaFree(d_rays);
+  cudaFree(d_camera);
 }
 
 int main(int argc, char** argv) {
@@ -229,8 +225,10 @@ readData(filename);
   initPixelBuffer();
   glutMainLoop();
   );
+  #ifdef _NO_OPENGL
   render();
   cudaDeviceSynchronize();
+  #endif
   atexit(exitfunc);
   return 0;
 }
