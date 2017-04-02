@@ -1,13 +1,9 @@
 #include "kernel.h"
 #include "structures.h"
-<<<<<<< HEAD
 #include <thrust/reduce.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/tuple.h>
-
-=======
 #include "camera.h"
->>>>>>> master
 #define TX 32
 #define TY 32
 #define AMBIENT_COLOR make_float3(0.8083, 1, 1)
@@ -72,15 +68,40 @@ __global__ void raytrace(uchar4 *d_out, int w, int h, Camera* camera, Triangle* 
   r.has_intersected = false;
   r.t = -1;
   r.intersected = 0;
-<<<<<<< HEAD
 //  Query
-   for(int i = 0; i < num_triangles; i ++) triangles[i].intersect(&r);
+   //for(int i = 0; i < num_triangles; i ++) triangles[i].intersect(&r);
 //  getFirstIntersection(d_uniform_grid, r);
-
-  if(!r.has_intersected) get_color_from_float3(AMBIENT_COLOR,d_out+index);
-  else get_color_from_float3(
-        get_light_color( get_point(&r,r.t), r.intersected->get_normal(), l, r.intersected, r.direction)
-        ,d_out+index);
+  //Query
+  intersect(triangles,num_triangles,&r);
+  
+  float3 finalColor;
+  
+  if(!r.has_intersected) finalColor = AMBIENT_COLOR;
+  else 
+  {
+  	finalColor = (1-KR) * get_light_color( get_point(&r,r.t), r.intersected->get_normal(), l, r.intersected, r.direction);
+  	float multiplier = KR;
+	float3 pos = get_point(&r,r.t);
+	float3 dir = r.direction;
+	float3 normal = r.intersected->get_normal();
+  	while(multiplier > 1e-4)
+  	{
+		r.origin = pos + 1e-4;//intersected point;
+  		r.direction = reflect(normalize(dir),normalize(normal));//reflect dir;
+  		r.has_intersected = false;
+  		r.t = -1;
+  		r.intersected = 0;
+  		intersect(triangles, num_triangles, &r);
+		if(!r.has_intersected) {finalColor = finalColor + multiplier * AMBIENT_COLOR; break;}
+		else finalColor = finalColor + multiplier * get_light_color( get_point(&r,r.t), r.intersected->get_normal(), l, r.intersected, r.direction);
+		pos = get_point(&r,r.t);
+		dir = r.direction;
+		normal = r.intersected->get_normal();
+		multiplier *= KR;
+	}
+  }
+  get_color_from_float3(finalColor, d_out + index);
+  //printf("T[%d][%d][%d][%d], c=%d\n", blockIdx.x,blockIdx.y,threadIdx.x,threadIdx.y, d_out + index);
   //else get_color_from_float3()
 }
 
@@ -215,51 +236,9 @@ void buildGrid(int w, int h, Triangle * triangles, int num_triangles) {
   cudaFree(zmax);
 }
 
-void kernelLauncher(uchar4 *d_out, int w, int h, Ray* rays, Triangle* triangles, int num_triangles, LightSource* l) {
-  //AMBIENT_COLOR = make_float3()
-  const dim3 blockSize(TX, TY);
-  const dim3 gridSize = dim3(w/TX,h/TY);
-  
-  raytrace<<<gridSize, blockSize>>>(d_out, w, h, rays, triangles, num_triangles, l);
-=======
-  //Query
-  intersect(triangles,num_triangles,&r);
-  
-  float3 finalColor;
-  
-  if(!r.has_intersected) finalColor = AMBIENT_COLOR;
-  else 
-  {
-  	finalColor = (1-KR) * get_light_color( get_point(&r,r.t), r.intersected->get_normal(), l, r.intersected, r.direction);
-  	float multiplier = KR;
-	float3 pos = get_point(&r,r.t);
-	float3 dir = r.direction;
-	float3 normal = r.intersected->get_normal();
-  	while(multiplier > 1e-4)
-  	{
-		r.origin = pos + 1e-4;//intersected point;
-  		r.direction = reflect(normalize(dir),normalize(normal));//reflect dir;
-  		r.has_intersected = false;
-  		r.t = -1;
-  		r.intersected = 0;
-  		intersect(triangles, num_triangles, &r);
-		if(!r.has_intersected) {finalColor = finalColor + multiplier * AMBIENT_COLOR; break;}
-		else finalColor = finalColor + multiplier * get_light_color( get_point(&r,r.t), r.intersected->get_normal(), l, r.intersected, r.direction);
-		pos = get_point(&r,r.t);
-		dir = r.direction;
-		normal = r.intersected->get_normal();
-		multiplier *= KR;
-	}
-  }
-  get_color_from_float3(finalColor, d_out + index);
-  //printf("T[%d][%d][%d][%d], c=%d\n", blockIdx.x,blockIdx.y,threadIdx.x,threadIdx.y, d_out + index);
-  //else get_color_from_float3()
-}
-
 void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* triangles, int num_triangles, LightSource* l) {
   //AMBIENT_COLOR = make_float3()
   const dim3 blockSize(TX, TY);
   const dim3 gridSize = dim3(w/TX,h/TY);
   raytrace<<<gridSize, blockSize>>>(d_out, w, h, camera, triangles, num_triangles, l);
->>>>>>> master
  }
