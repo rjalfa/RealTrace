@@ -3,6 +3,7 @@
 #include <thrust/reduce.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/tuple.h>
+#include <thrust/scan.h>
 #include "camera.h"
 #include "helper_cuda.h"
 #define TX 32
@@ -147,12 +148,15 @@ __global__ void count_sizes(UniformGrid * ug, Triangle * triangles, int num_tria
 __global__ void reserve_space(UniformGrid * ug, int nv) {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 	if(idx < nv) {
-		ug->voxels[idx].primitives = (int * ) malloc(ug->voxel_sizes[idx] * sizeof(int));
-		if(ug->voxels[idx].primitives == 0) {
-			if(ug->voxel_sizes[idx] != 0)
-				printf("couldn't allocate %d for: %d\n", ug->voxel_sizes[idx], idx);
-		}
-		ug->voxels[idx].max_size = ug->voxel_sizes[idx];
+//		ug->voxels[idx].primitives = (int * ) malloc(ug->voxel_sizes[idx] * sizeof(int));
+//		if(ug->voxels[idx].primitives == 0) {
+//			if(ug->voxel_sizes[idx] != 0)
+//				printf("couldn't allocate %d for: %d\n", ug->voxel_sizes[idx], idx);
+//		}
+		if(idx > 0) ug->voxels[idx].offset = ug->voxel_sizes[idx - 1];
+		else ug->voxels[idx].offset = 0;
+		if(idx > 0) ug->voxels[idx].max_size = ug->voxel_sizes[idx] - ug->voxel_sizes[idx - 1];
+		else ug->voxels[idx].max_size = ug->voxel_sizes[idx];
 		ug->voxels[idx].curr_size = 0;
 //		printf("%d\n", ug->voxels[idx].max_size);
 	}
@@ -177,7 +181,7 @@ __global__ void build_grid(UniformGrid * ug, Triangle * triangles, int num_trian
         for(int y = vymin; y <= vymax; y++) {
           for(int x = vxmin; x <= vxmax; x++) {
             int o = ug->offset(x, y, z);
-            	ug->voxels[o].addPrimitive(idx);
+            	ug->voxels[o].addPrimitive(ug, idx);
           }
         }
       }
@@ -273,6 +277,16 @@ void buildGrid(int w, int h, Triangle * triangles, int num_triangles) {
 
   const dim3 gridSizeVoxels(damnCeil(h_uniform_grid.nv, TX * TY));
   count_sizes <<< gridSizeTriangles, blockSize >>> (d_uniform_grid, triangles, num_triangles);
+
+  checkCudaErrors(cudaMemcpy(&h_uniform_grid, d_uniform_grid, sizeof(UniformGrid), cudaMemcpyDeviceToHost));
+
+  thrust::device_ptr < int > voxel_sizes = thrust::device_pointer_cast(h_uniform_grid.voxel_sizes);
+  int total_space = thrust::reduce(voxel_sizes, voxel_sizes + h_uniform_grid.nv);
+  checkCudaErrors(cudaMalloc(&(h_uniform_grid.index_pool), sizeof(int) * total_space));
+  thrust::inclusive_scan(voxel_sizes, voxel_sizes + h_uniform_grid.nv, voxel_sizes);
+
+  checkCudaErrors(cudaMemcpy(d_uniform_grid, &h_uniform_grid, sizeof(UniformGrid), cudaMemcpyHostToDevice));
+
   reserve_space <<< gridSizeVoxels, blockSize >>> (d_uniform_grid, h_uniform_grid.nv);
 //  cudaDeviceSynchronize();
 

@@ -140,19 +140,19 @@ __host__ __device__ bool Triangle::intersect(Ray *r)
 }
 
 
-__device__ void Voxel::addPrimitive(int i) {
+__device__ void Voxel::addPrimitive(UniformGrid * ug, int i) {
 	// cout << p << endl;
 	// idx.push_back(i);
 	// primitives.push_back(p);
 //	printf("%d %d\n", max_size, req_idx);
 	int req_idx = atomicAdd(&curr_size, 1);
-	primitives[req_idx] = i;
+	ug->index_pool[offset + req_idx] = i;
 }
 
-__host__ __device__ bool Voxel::intersect(Triangle * triangles, Ray& ray) {
+__host__ __device__ bool Voxel::intersect(UniformGrid * ug, Triangle * triangles, Ray& ray) {
 	bool hitSomething = false;
 	for(int i = 0; i < max_size; i++) {
-		if(triangles[primitives[i]].intersect(&ray)) {
+		if(triangles[ug->index_pool[offset + i]].intersect(&ray)) {
 //			ray.setIdx(idx[i]);
 			hitSomething = true;
 		}
@@ -368,7 +368,7 @@ __host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) 
 		if(voxel.max_size != voxel.curr_size)
 			printf("something is wrong with: %d", offset(pos[0], pos[1], pos[2]));
 		if(voxel.max_size != 0)
-			hitSomething |= voxel.intersect(triangles, ray);
+			hitSomething |= voxel.intersect(this, triangles, ray);
 		// advance to next voxel
 		// find stepAxis for stepping to next voxel
 		int bits =  ((nextCrossingT[0] < nextCrossingT[1]) << 2) +

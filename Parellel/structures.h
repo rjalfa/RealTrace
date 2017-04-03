@@ -57,15 +57,16 @@ class Triangle
 		}
 };
 
+class UniformGrid;
+
 class Voxel {
 public:
-	int curr_size, max_size;
-	int * primitives;
-	__device__ void addPrimitive(int i);
-	__host__ __device__ bool intersect(Triangle * triangles, Ray& ray);
+	int curr_size, max_size, offset;
+	__device__ void addPrimitive(UniformGrid * ug, int i);
+	__host__ __device__ bool intersect(UniformGrid * ug, Triangle * triangles, Ray& ray);
 	Voxel() {
 		curr_size = 0;
-		primitives = 0;
+		offset = 0;
 		max_size = 0;
 	}
 };
@@ -80,13 +81,14 @@ class UniformGrid {
 	__host__ __device__ float findVoxelsPerUnitDist(float delta[], int num);
 
 public:
-	int * voxel_sizes;
+	int * voxel_sizes, * index_pool;
 	Voxel * voxels;
 	int nv;
 	BBox bounds;
 	UniformGrid() {
 		voxel_sizes = 0;
 		voxels = 0;
+		index_pool = 0;
 		nv = 0;
 		voxelsPerUnitDist = 0;
 	};

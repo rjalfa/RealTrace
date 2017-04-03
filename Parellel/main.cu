@@ -35,7 +35,7 @@
 #define OPENGL(X) 
 #endif
 
-#define SCALING_FACTOR 2
+#define SCALING_FACTOR 15
 
 using namespace std;
  // texture and pixel objects
