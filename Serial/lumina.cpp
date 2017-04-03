@@ -40,7 +40,7 @@
 #include <sstream>
 #include <utility>
 
-#define SCALING_FACTOR 10
+#define SCALING_FACTOR 15
 char* getShaderCode(const char* filename);
 void printLog(GLuint object);
 GLuint createShader(const char* filename, GLenum type);
@@ -254,20 +254,22 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 			else {
 			#endif
 				m = new Material(world);
-				m1 = new Material(world);
+				// m1 = new Material(world);
 				init_material_from_obj(m);
 			#ifndef CUDA_SERVER
 			}
 			#endif
 			// cout << idx[0][0] << " " << idx[1][0] << " " << idx[2][0] << endl;
 			Triangle * triangle = new Triangle(vertices[idx[0][0]-1], vertices[idx[1][0]-1], vertices[idx[2][0]-1], m);
-			Triangle * triangle2 = new Triangle(vertices[idx[0][0]-1] + offset, vertices[idx[1][0]-1] + offset, vertices[idx[2][0]-1] + offset, m1);
+			// Triangle * triangle2 = new Triangle(vertices[idx[0][0]-1] + offset, vertices[idx[1][0]-1] + offset, vertices[idx[2][0]-1] + offset, m1);
 			// cerr << "rendered\n";
-			all_triangles.push_back(triangle);
-			all_triangles.push_back(triangle2);
-			world->addObject(triangle);
-			world->addObject(triangle2);
-			// cout << world->getObjectList().back() << " " << all_triangles.back() << endl;
+			if(all_triangles.size() < 2000) {
+				all_triangles.push_back(triangle);
+				// all_triangles.push_back(triangle2);
+				world->addObject(triangle);
+				// world->addObject(triangle2);
+				// cout << world->getObjectList().back() << " " << all_triangles.back() << endl;
+			}
 		} else if(c == "v") {
 			is >> v[0] >> v[1] >> v[2];
 			vertices.push_back(Vector3D(v[0]*SCALING_FACTOR, v[1]*SCALING_FACTOR, v[2]*SCALING_FACTOR));
@@ -297,7 +299,7 @@ int init_resources(void)
 		fprintf(stderr, "Could not bind location: coord2d\n");
 		return 0;
 	}
-	Vector3D camera_position(30, 0, 0);
+	Vector3D camera_position(60, 60, 0);
 	Vector3D camera_target(0, 0, 0); //Looking down -Z axis
 	Vector3D camera_up(0, 1, 0);
 	float camera_fovy =  45;
@@ -361,10 +363,10 @@ int init_resources(void)
 	//world->addLight(light2);
 
 	// load_image_from_obj(world, "pig_triangulated.obj");
-	//load_image_from_obj(world, "bob_tri.obj");
+	load_image_from_obj(world, "bob_tri.obj");
 	// load_image_from_obj(world, "bs_angry.obj");
 	// load_image_from_obj(world, "tetrahedron.obj");
-load_image_from_obj(world, "blub_triangulated.obj");
+// load_image_from_obj(world, "blub_triangulated.obj");
 	engine = new RenderEngine(world, camera);
 
 	//Initialise texture

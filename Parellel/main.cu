@@ -193,6 +193,7 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
   cerr << "[INFO] Memory to be transferred to GPU: " << mem << " B" << endl;
   num_triangles = h_triangles.size();  
   cerr << "[INFO] readData Complete" << endl;
+  buildGrid(screen_width, screen_height, d_triangles, num_triangles);
 }
 
 void exitfunc() {

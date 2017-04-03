@@ -61,7 +61,7 @@ class Voxel {
 public:
 	int curr_size, max_size;
 	int * primitives;
-	__host__ __device__ void addPrimitive(int req_idx, int i);
+	__device__ void addPrimitive(int i);
 	__host__ __device__ bool intersect(Triangle * triangles, Ray& ray);
 	Voxel() {
 		curr_size = 0;

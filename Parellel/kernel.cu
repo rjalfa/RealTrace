@@ -4,6 +4,7 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/tuple.h>
 #include "camera.h"
+#include "helper_cuda.h"
 #define TX 32
 #define TY 32
 #define AMBIENT_COLOR make_float3(0.8083, 1, 1)
@@ -38,25 +39,26 @@ __device__ void intersect(Triangle* triangles, int num_triangles, Ray* r)
 
 //Shared Memory Loop Intersect
 
-__device__ void intersect(Triangle* triangles, int num_triangles, Ray* r)
+__device__ void intersect(Triangle* triangles, int num_triangles, Ray* r, UniformGrid * ug)
 {
-  __shared__ Triangle localObjects[32];
-  int triangles_to_scan = num_triangles;
-  while(triangles_to_scan > 0)
-  {
-    int x = min(triangles_to_scan,32);
-    if(threadIdx.x == 0 && threadIdx.y < x) localObjects[threadIdx.y] = triangles[threadIdx.y];
-    __syncthreads();
-
-    for(int i = 0; i < x; i ++) localObjects[i].intersect(r);
-    triangles += 32; 
-    triangles_to_scan -= 32;
-    __syncthreads();
-  }
+//  __shared__ Triangle localObjects[32];
+//  int triangles_to_scan = num_triangles;
+//  while(triangles_to_scan > 0)
+//  {
+//    int x = min(triangles_to_scan,32);
+//    if(threadIdx.x == 0 && threadIdx.y < x) localObjects[threadIdx.y] = triangles[threadIdx.y];
+//    __syncthreads();
+//
+//    for(int i = 0; i < x; i ++) localObjects[i].intersect(r);
+//    triangles += 32;
+//    triangles_to_scan -= 32;
+//    __syncthreads();
+//  }
+	ug->intersect(triangles, *r);
 }
 
 
-__global__ void raytrace(uchar4 *d_out, int w, int h, Camera* camera, Triangle* triangles, int num_triangles, LightSource* l) {
+__global__ void raytrace(uchar4 *d_out, int w, int h, Camera* camera, Triangle* triangles, int num_triangles, LightSource* l, UniformGrid * ug) {
   int i = blockDim.x * blockIdx.x + threadIdx.x;
   int j = blockDim.y * blockIdx.y + threadIdx.y;
   int index = i + j*w; // 1D indexing
@@ -72,7 +74,7 @@ __global__ void raytrace(uchar4 *d_out, int w, int h, Camera* camera, Triangle* 
    //for(int i = 0; i < num_triangles; i ++) triangles[i].intersect(&r);
 //  getFirstIntersection(d_uniform_grid, r);
   //Query
-  intersect(triangles,num_triangles,&r);
+  intersect(triangles,num_triangles,&r, ug);
   
   float3 finalColor;
   
@@ -91,7 +93,7 @@ __global__ void raytrace(uchar4 *d_out, int w, int h, Camera* camera, Triangle* 
   		r.has_intersected = false;
   		r.t = -1;
   		r.intersected = 0;
-  		intersect(triangles, num_triangles, &r);
+  		intersect(triangles, num_triangles, &r, ug);
 		if(!r.has_intersected) {finalColor = finalColor + multiplier * AMBIENT_COLOR; break;}
 		else finalColor = finalColor + multiplier * get_light_color( get_point(&r,r.t), r.intersected->get_normal(), l, r.intersected, r.direction);
 		pos = get_point(&r,r.t);
@@ -116,7 +118,7 @@ __global__ void get_bounds(float * xmin, float * xmax, float * ymin, float * yma
   }
 }
 
-__global__ void reserve_sizes(UniformGrid * ug, Triangle * triangles, int num_triangles) {
+__global__ void count_sizes(UniformGrid * ug, Triangle * triangles, int num_triangles) {
   int idx = blockDim.x * blockIdx.x + threadIdx.x;
   if(idx < num_triangles) {
       float xmin, xmax, ymin, ymax, zmin, zmax;
@@ -139,12 +141,21 @@ __global__ void reserve_sizes(UniformGrid * ug, Triangle * triangles, int num_tr
           }
         }
       }
-
-      if(idx < ug->nv) {
-        ug->voxels[idx].primitives = (int * ) malloc(ug->voxel_sizes[idx] * sizeof(int));
-        ug->voxels[idx].max_size = ug->voxel_sizes[idx];
-      }
   }
+}
+
+__global__ void reserve_space(UniformGrid * ug, int nv) {
+	int idx = blockDim.x * blockIdx.x + threadIdx.x;
+	if(idx < nv) {
+		ug->voxels[idx].primitives = (int * ) malloc(ug->voxel_sizes[idx] * sizeof(int));
+		if(ug->voxels[idx].primitives == 0) {
+			if(ug->voxel_sizes[idx] != 0)
+				printf("couldn't allocate %d for: %d\n", ug->voxel_sizes[idx], idx);
+		}
+		ug->voxels[idx].max_size = ug->voxel_sizes[idx];
+		ug->voxels[idx].curr_size = 0;
+//		printf("%d\n", ug->voxels[idx].max_size);
+	}
 }
 
 __global__ void build_grid(UniformGrid * ug, Triangle * triangles, int num_triangles) {
@@ -166,8 +177,7 @@ __global__ void build_grid(UniformGrid * ug, Triangle * triangles, int num_trian
         for(int y = vymin; y <= vymax; y++) {
           for(int x = vxmin; x <= vxmax; x++) {
             int o = ug->offset(x, y, z);
-            int req_idx = atomicAdd(&(ug->voxels[o].curr_size), 1);
-            ug->voxels[o].addPrimitive(req_idx, idx);
+            	ug->voxels[o].addPrimitive(idx);
           }
         }
       }
@@ -199,46 +209,97 @@ void buildGrid(int w, int h, Triangle * triangles, int num_triangles) {
   cudaMalloc(&zmin, sizeof(float) * num_triangles);
   cudaMalloc(&zmax, sizeof(float) * num_triangles);
 
+//  printf("%x\n", xmin);
+//  std::cerr << "allocation done" << endl;
   const dim3 blockSize(TX * TY);
-  const dim3 gridSize(damnCeil(num_triangles, TX * TY));
+  const dim3 gridSizeTriangles(damnCeil(num_triangles, TX * TY));
 
-  get_bounds <<< gridSize, blockSize >>> (xmin, xmax, ymin, ymax, zmin, zmax, triangles, num_triangles);
+  get_bounds <<< gridSizeTriangles, blockSize >>> (xmin, xmax, ymin, ymax, zmin, zmax, triangles, num_triangles);
+//  printf("Error: %s\n", cudaGetErrorString(cudaGetLastError()));
+//  cudaDeviceSynchronize();
+//  std::cerr << "kernel done" << endl;
 
   thrust::tuple <float, float, float> axis_min, axis_max;
-  axis_min = thrust::reduce(thrust::make_zip_iterator(thrust::make_tuple(xmin, ymin, zmin)),
-		  	 thrust::make_zip_iterator(thrust::make_tuple(xmin + num_triangles, ymin + num_triangles, zmin + num_triangles)),
-		  	 thrust::make_tuple(xmin[0], ymin[0], zmin[0]), justMin());
-  axis_max = thrust::reduce(thrust::make_zip_iterator(thrust::make_tuple(xmax, ymax, zmax)),
-		  	 thrust::make_zip_iterator(thrust::make_tuple(xmax + num_triangles, ymax + num_triangles, zmax + num_triangles)),
-		  	 thrust::make_tuple(xmax[0], ymax[0], zmax[0]), justMax());
+
+//  thrust::device_ptr<float> cptr = thrust::device_pointer_cast(xmin);
+//  float mn = thrust::reduce(cptr, cptr + num_triangles, 1e36, thrust::minimum<float>());
+//  cudaDeviceSynchronize();
+//  std::cerr << mn << endl;
+
+  thrust::device_ptr < float > xminptr = thrust::device_pointer_cast(xmin);
+  thrust::device_ptr < float > xmaxptr = thrust::device_pointer_cast(xmax);
+  thrust::device_ptr < float > yminptr = thrust::device_pointer_cast(ymin);
+  thrust::device_ptr < float > ymaxptr = thrust::device_pointer_cast(ymax);
+  thrust::device_ptr < float > zminptr = thrust::device_pointer_cast(zmin);
+  thrust::device_ptr < float > zmaxptr = thrust::device_pointer_cast(zmax);
+
+//  thrust::reduce(thrust::make_zip_iterator(thrust::make_tuple(xminptr), xminptr + num_triangles, 1e36, thrust::minimum<float>());
+//  thrust::make_zip_iterator(thrust::make_tuple(xminptr, yminptr, zminptr));
+//  axis_min = thrust::reduce(thrust::make_zip_iterator(thrust::make_tuple(xminptr, yminptr, zminptr)),
+//		  	 thrust::make_zip_iterator(thrust::make_tuple(xminptr + num_triangles, yminptr + num_triangles, zminptr + num_triangles)),
+//		  	 thrust::make_tuple(1e36, 1e36, 1e36), justMin());
+//  cudaDeviceSynchronize();
+//  std::cerr << thrust::get < 0 > (axis_min) << " " << thrust::get < 1 > (axis_min) << " " << thrust::get < 2 > (axis_min) << endl;
+
+//  axis_max = thrust::reduce(thrust::make_zip_iterator(thrust::make_tuple(xmaxptr, ymaxptr, zmaxptr)),
+//		  	 thrust::make_zip_iterator(thrust::make_tuple(xmaxptr + num_triangles, ymaxptr + num_triangles, zmaxptr + num_triangles)),
+//		  	 thrust::make_tuple(-1e36, -1e36, -1e36), justMax());
+//
+//  cudaDeviceSynchronize();
+//  std::cerr << thrust::get < 0 > (axis_max) << " " << thrust::get < 1 > (axis_max) << " " << thrust::get < 2 > (axis_max) << endl;
 
   UniformGrid h_uniform_grid;
-  h_uniform_grid.bounds.axis_min[0] = thrust::get < 0 > (axis_min);
-  h_uniform_grid.bounds.axis_min[1] = thrust::get < 1 > (axis_min);
-  h_uniform_grid.bounds.axis_min[2] = thrust::get < 2 > (axis_min);
-  h_uniform_grid.bounds.axis_max[0] = thrust::get < 0 > (axis_max);
-  h_uniform_grid.bounds.axis_max[1] = thrust::get < 1 > (axis_max);
-  h_uniform_grid.bounds.axis_max[2] = thrust::get < 2 > (axis_max);
+//  h_uniform_grid.bounds.axis_min[0] = thrust::get < 0 > (axis_min);
+//  h_uniform_grid.bounds.axis_min[1] = thrust::get < 1 > (axis_min);
+//  h_uniform_grid.bounds.axis_min[2] = thrust::get < 2 > (axis_min);
+//  h_uniform_grid.bounds.axis_max[0] = thrust::get < 0 > (axis_max);
+//  h_uniform_grid.bounds.axis_max[1] = thrust::get < 1 > (axis_max);
+//  h_uniform_grid.bounds.axis_max[2] = thrust::get < 2 > (axis_max);
+
+  h_uniform_grid.bounds.axis_min[0] = thrust::reduce(xminptr, xminptr + num_triangles, 1e36, thrust::minimum<float>());
+  h_uniform_grid.bounds.axis_min[1] = thrust::reduce(yminptr, yminptr + num_triangles, 1e36, thrust::minimum<float>());
+  h_uniform_grid.bounds.axis_min[2] = thrust::reduce(zminptr, zminptr + num_triangles, 1e36, thrust::minimum<float>());
+  h_uniform_grid.bounds.axis_max[0] = thrust::reduce(xmaxptr, xmaxptr + num_triangles, -1e36, thrust::maximum<float>());
+  h_uniform_grid.bounds.axis_max[1] = thrust::reduce(ymaxptr, ymaxptr + num_triangles, -1e36, thrust::maximum<float>());
+  h_uniform_grid.bounds.axis_max[2] = thrust::reduce(zmaxptr, zmaxptr + num_triangles, -1e36, thrust::maximum<float>());
+
+//  cudaDeviceSynchronize();
+//  std::cerr << h_uniform_grid.bounds.axis_min[0] << " " << h_uniform_grid.bounds.axis_min[1] << " " << h_uniform_grid.bounds.axis_min[2] << endl;
 
   h_uniform_grid.initialize(num_triangles);
   
-  cudaMemcpy(d_uniform_grid, &h_uniform_grid, sizeof(UniformGrid), cudaMemcpyHostToDevice);
+  checkCudaErrors(cudaMalloc(&d_uniform_grid, sizeof(UniformGrid)));
+  checkCudaErrors(cudaMemcpy(d_uniform_grid, &h_uniform_grid, sizeof(UniformGrid), cudaMemcpyHostToDevice));
 
-  reserve_sizes <<< gridSize, blockSize >>> (d_uniform_grid, triangles, num_triangles);
+  const dim3 gridSizeVoxels(damnCeil(h_uniform_grid.nv, TX * TY));
+  count_sizes <<< gridSizeTriangles, blockSize >>> (d_uniform_grid, triangles, num_triangles);
+  reserve_space <<< gridSizeVoxels, blockSize >>> (d_uniform_grid, h_uniform_grid.nv);
+//  cudaDeviceSynchronize();
 
-  build_grid <<< gridSize, blockSize >>> (d_uniform_grid, triangles, num_triangles);
+//  printf("Error: %s\n", cudaGetErrorString(cudaGetLastError()));
 
-  cudaFree(xmin);
-  cudaFree(xmax);
-  cudaFree(ymin);
-  cudaFree(ymax);
-  cudaFree(zmin);
-  cudaFree(zmax);
+  build_grid <<< gridSizeTriangles, blockSize >>> (d_uniform_grid, triangles, num_triangles);
+//  printf("Error: %s\n", cudaGetErrorString(cudaGetLastError()));
+//  printf("%x\n", xmin);
+  checkCudaErrors(cudaFree(xmin));
+  checkCudaErrors(cudaFree(xmax));
+  checkCudaErrors(cudaFree(ymin));
+  checkCudaErrors(cudaFree(ymax));
+  checkCudaErrors(cudaFree(zmin));
+  checkCudaErrors(cudaFree(zmax));
+
+//  checkCudaErrors(cudaMemcpy(&h_uniform_grid, d_uniform_grid, sizeof(UniformGrid), cudaMemcpyDeviceToHost));
+//  int voxel_sizes[h_uniform_grid.nv];
+//  checkCudaErrors(cudaMemcpy(voxel_sizes, h_uniform_grid.voxel_sizes, sizeof(voxel_sizes), cudaMemcpyDeviceToHost));
+//  for(int i = 0; i < h_uniform_grid.nv; i++) {
+//	  std::cout << voxel_sizes[i] << endl;
+//  }
 }
 
 void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* triangles, int num_triangles, LightSource* l) {
   //AMBIENT_COLOR = make_float3()
   const dim3 blockSize(TX, TY);
   const dim3 gridSize = dim3(w/TX,h/TY);
-  raytrace<<<gridSize, blockSize>>>(d_out, w, h, camera, triangles, num_triangles, l);
+  raytrace<<<gridSize, blockSize>>>(d_out, w, h, camera, triangles, num_triangles, l, d_uniform_grid);
+//  exit(0);
  }

@@ -139,6 +139,11 @@ UniformGrid::UniformGrid(vector < Triangle * > &p) {
 	// 		cout << val << endl;
 	// 	cout << "-------" << endl;
 	// }
+
+	for(int i = 0; i < nv; i++) {
+		cout << voxels[i].primitives.size() << endl;
+	}
+	cout << endl;
 }
 
 bool UniformGrid::intersect(Ray& ray) {

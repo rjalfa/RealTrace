@@ -1,5 +1,7 @@
 #include "structures.h"
 #include "utilities.h"
+#include "helper_cuda.h"
+#include <cstdio>
 
 const float SICK_FLT_MAX = 1e36;
 const float SICK_FLT_MIN = -1e36;
@@ -93,7 +95,7 @@ __host__ __device__ float tripleProduct(const float3& v1,const float3& v2,const 
 
 __host__ __device__ float distance(const float3& v1, const float3& v2)
 {
-	return sqrt(0.0L + (v1.x-v2.x)*(v1.x-v2.x) + (v1.y-v2.y)*(v1.y-v2.y) + (v1.z-v2.z)*(v1.z-v2.z));
+	return sqrt(0.0 + (v1.x-v2.x)*(v1.x-v2.x) + (v1.y-v2.y)*(v1.y-v2.y) + (v1.z-v2.z)*(v1.z-v2.z));
 }
 
 __host__ __device__ float3 reflect(const float3& I, const float3& N)
@@ -138,10 +140,12 @@ __host__ __device__ bool Triangle::intersect(Ray *r)
 }
 
 
-__host__ __device__ void Voxel::addPrimitive(int req_idx, int i) {
+__device__ void Voxel::addPrimitive(int i) {
 	// cout << p << endl;
 	// idx.push_back(i);
 	// primitives.push_back(p);
+//	printf("%d %d\n", max_size, req_idx);
+	int req_idx = atomicAdd(&curr_size, 1);
 	primitives[req_idx] = i;
 }
 
@@ -167,7 +171,7 @@ __host__ __device__ float UniformGrid::findVoxelsPerUnitDist(float delta[], int 
 __host__ __device__ int UniformGrid::posToVoxel(const float3& pos, int axis) {
 	float val;
 	if(axis == 0) val = pos.x;
-	else if(axis == 2) val = pos.y;
+	else if(axis == 1) val = pos.y;
 	else val = pos.z;
 	int v = ((val - bounds.axis_min[axis]) * invWidth[axis]);
 	return min(max(v, 0), nVoxels[axis] - 1);
@@ -201,7 +205,7 @@ __host__ void UniformGrid::initialize(int num_triangles) {
 	voxelsPerUnitDist = findVoxelsPerUnitDist(delta, num_triangles);
 
 	for(int axis = 0; axis < 3; axis++) {
-		nVoxels[axis] = ceil(0.0L + delta[axis] * voxelsPerUnitDist);
+		nVoxels[axis] = ceil(0.0 + delta[axis] * voxelsPerUnitDist);
 		nVoxels[axis] = max(1, nVoxels[axis]);
 		// 64 is magically determined number, lol
 		nVoxels[axis] = min(nVoxels[axis], 64);
@@ -214,8 +218,10 @@ __host__ void UniformGrid::initialize(int num_triangles) {
 		nv *= nVoxels[axis];
 	}
 
-	cudaMalloc(&voxels, sizeof(Voxel) * nv);
-	cudaMalloc(&voxel_sizes, sizeof(int) * nv);
+	checkCudaErrors(cudaMalloc(&voxels, sizeof(Voxel) * nv));
+	checkCudaErrors(cudaMalloc(&voxel_sizes, sizeof(int) * nv));
+	checkCudaErrors(cudaMemset(voxels, 0, sizeof(Voxel) * nv));
+	checkCudaErrors(cudaMemset(voxel_sizes, 0, sizeof(int) * nv));
 }
 
 
@@ -278,6 +284,7 @@ __host__ __device__  inline void do_swap (T& a, T& b)  {
 
 __host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) {
 	// check ray against overall grid bounds
+//	printf("I have been called!\n");
 	float rayT;
 	bool flag = true;
 	{
@@ -321,53 +328,35 @@ __host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) 
 
 	if(!flag) return false;
 
-	float3 gridIntersect = get_point(&ray, ray.t);
-
+	float3 gridIntersectf3 = get_point(&ray, ray.t);
+	float gridIntersect[3];
+	gridIntersect[0] = gridIntersectf3.x;
+	gridIntersect[1] = gridIntersectf3.y;
+	gridIntersect[2] = gridIntersectf3.z;
+	float direction[3];
+	direction[0] = ray.direction.x;
+	direction[1] = ray.direction.y;
+	direction[2] = ray.direction.z;
 	int pos[3], step[3], out[3];
 	float nextCrossingT[3], deltaT[3];
 	// set up 3D DDA for ray
 	for(int axis = 0; axis < 3; axis++) {
 		// compute current voxel for axis
-		pos[axis] = posToVoxel(gridIntersect, axis);
-		if(ray.direction.x >= 0) {
+		pos[axis] = posToVoxel(gridIntersectf3, axis);
+		if(direction[axis] >= 0) {
 			// handle ray with positive direction for voxel stepping
-			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis] + 1, axis) - gridIntersect.x) / ray.direction.x;
-			deltaT[axis] = width[axis] / ray.direction.x;
+			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis] + 1, axis) - gridIntersect[axis]) / direction[axis];
+			deltaT[axis] = width[axis] / direction[axis];
 			step[axis] = 1;
 			out[axis] = nVoxels[axis];
 		} else {
 			// handle ray with negative direction for voxel stepping
-			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis], axis) - gridIntersect.x) / ray.direction.x;
-			deltaT[axis] = -width[axis] / ray.direction.x;
+			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis], axis) - gridIntersect[axis]) / direction[axis];
+			deltaT[axis] = -width[axis] / direction[axis];
 			step[axis] = -1;
 			out[axis] = -1;
 		}
-		if(ray.direction.y >= 0) {
-			// handle ray with positive direction for voxel stepping
-			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis] + 1, axis) - gridIntersect.y) / ray.direction.y;
-			deltaT[axis] = width[axis] / ray.direction.y;
-			step[axis] = 1;
-			out[axis] = nVoxels[axis];
-		} else {
-			// handle ray with negative direction for voxel stepping
-			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis], axis) - gridIntersect.y) / ray.direction.y;
-			deltaT[axis] = -width[axis] / ray.direction.y;
-			step[axis] = -1;
-			out[axis] = -1;
-		}
-		if(ray.direction.z >= 0) {
-			// handle ray with positive direction for voxel stepping
-			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis] + 1, axis) - gridIntersect.z) / ray.direction.z;
-			deltaT[axis] = width[axis] / ray.direction.z;
-			step[axis] = 1;
-			out[axis] = nVoxels[axis];
-		} else {
-			// handle ray with negative direction for voxel stepping
-			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis], axis) - gridIntersect.z) / ray.direction.z;
-			deltaT[axis] = -width[axis] / ray.direction.z;
-			step[axis] = -1;
-			out[axis] = -1;
-		}
+		// cerr << pos[axis] << " " << step[axis] << " " << out[axis] << endl;
 	}
 	// walk ray through voxel grid
 	bool hitSomething = false;
@@ -376,6 +365,8 @@ __host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) 
 		// check for intersection in current voxel and advance to next
 		// Voxel * voxel = voxels[offset(pos[0], pos[1], pos[2])];
 		Voxel& voxel = voxels[offset(pos[0], pos[1], pos[2])];
+		if(voxel.max_size != voxel.curr_size)
+			printf("something is wrong with: %d", offset(pos[0], pos[1], pos[2]));
 		if(voxel.max_size != 0)
 			hitSomething |= voxel.intersect(triangles, ray);
 		// advance to next voxel
