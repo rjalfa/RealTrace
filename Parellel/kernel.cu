@@ -15,6 +15,8 @@ __device__
 unsigned char clip(float x){ return x > 255 ? 255 : (x < 0 ? 0 : x); }
 
 UniformGrid * d_uniform_grid;
+float3* colors = 0;
+Ray* d_rays = 0;
 
 // kernel function to compute decay and shading
 __device__ void get_color_from_float3(float3 color, uchar4* cell)
@@ -58,54 +60,94 @@ __device__ void intersect(Triangle* triangles, int num_triangles, Ray* r, Unifor
 	ug->intersect(triangles, *r);
 }
 
+////////////////////////////////////////////////////////////////////////////
+// Ray generation kernel
+// Parameters:
+// camera = Camera object
+// w = width
+// h = height
+// out_rays = Output rays
+// d_out = Output image to be resetted
+////////////////////////////////////////////////////////////////////////////
+__global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_rays, uchar4* d_out)
+{
+    int i = blockDim.x * blockIdx.x + threadIdx.x;
+    int j = blockDim.y * blockIdx.y + threadIdx.y;
+    float3 pos = camera->get_position();
+    float3 dir = camera->get_ray_direction(i,j);
+    int index = i + j*w; // 1D indexing
+    Ray r;
+    r.origin = pos;
+    r.direction = dir;
+    r.has_intersected = false;
+    r.t = -1;
+    r.intersected = 0;
+    out_rays[index] = r;
+    d_out[index] = make_uchar4(0,0,0,0);
+}
 
-__global__ void raytrace(uchar4 *d_out, int w, int h, Camera* camera, Triangle* triangles, int num_triangles, LightSource* l, UniformGrid * ug) {
+////////////////////////////////////////////////////////////////////////////
+// Recursive Ray-tracing Kernel
+// Parameters:
+// out_color = Global Color Array that stores output from all kernels
+// in_coeffs = The coeffs for the current kernel rays. If NULL, assumed all 1's
+// w = width
+// h = height
+// rays = The rays to trace for this kernel
+// out_rays_reflect = The rays that emerge from reflection from this kernel, If NULL, assumed end of recursion
+// out_rays_refract = The rays that emerge from reflection from this kernel, If NULL, assumed end of recursion
+// out_coeffs_reflect = The coeffs for the reflected rays
+// out_coeffs_refract = The coeffs for the refracted rays
+// triangles = Triangle objects
+// num_triangles = Number of triangles in above
+// l = LightSource object
+// ug = UniformGrid object
+////////////////////////////////////////////////////////////////////////////
+__global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray* rays, Ray* out_rays_reflect, Ray* out_rays_refract, float* out_coeffs_reflect, float* out_coeffs_refract, Triangle* triangles, int num_triangles, LightSource* l, UniformGrid * ug)
+{
   int i = blockDim.x * blockIdx.x + threadIdx.x;
   int j = blockDim.y * blockIdx.y + threadIdx.y;
-  int index = i + j*w; // 1D indexing
-  float3 pos = camera->get_position();
-  float3 dir = camera->get_ray_direction(i,j);
-  Ray r;
-  r.origin = pos;
-  r.direction = dir;
-  r.has_intersected = false;
-  r.t = -1;
-  r.intersected = 0;
-//  Query
-   //for(int i = 0; i < num_triangles; i ++) triangles[i].intersect(&r);
-//  getFirstIntersection(d_uniform_grid, r);
-  //Query
+  int index = i + j * w;
+
+  //Switches
+  bool in_coeffs_defined = (in_coeffs != NULL);
+  bool can_refract = (out_rays_refract != NULL && out_coeffs_refract != NULL);
+  bool can_reflect = (out_rays_reflect != NULL && out_coeffs_reflect != NULL);
+
+  //Get owned ray
+  Ray r = rays[index];
   intersect(triangles,num_triangles,&r, ug);
   
-  float3 finalColor;
-  
-  if(!r.has_intersected) finalColor = AMBIENT_COLOR;
-  else 
+  //If only diffuse possible, do one time intersection
+  float3 finalColor = make_float3(0,0,0);
+  if(!can_reflect && !can_refract)
   {
-  	finalColor = (1-KR) * get_light_color( get_point(&r,r.t), r.intersected->get_normal(), l, r.intersected, r.direction);
-  	float multiplier = KR;
-	float3 pos = get_point(&r,r.t);
-	float3 dir = r.direction;
-	float3 normal = r.intersected->get_normal();
-  	while(multiplier > 1e-4)
-  	{
-		r.origin = pos + 1e-4;//intersected point;
-  		r.direction = reflect(normalize(dir),normalize(normal));//reflect dir;
-  		r.has_intersected = false;
-  		r.t = -1;
-  		r.intersected = 0;
-  		intersect(triangles, num_triangles, &r, ug);
-		if(!r.has_intersected) {finalColor = finalColor + multiplier * AMBIENT_COLOR; break;}
-		else finalColor = finalColor + multiplier * get_light_color( get_point(&r,r.t), r.intersected->get_normal(), l, r.intersected, r.direction);
-		pos = get_point(&r,r.t);
-		dir = r.direction;
-		normal = r.intersected->get_normal();
-		multiplier *= KR;
-	}
+    if(!r.has_intersected) finalColor = AMBIENT_COLOR;
+    else finalColor = get_light_color(get_point(&r,r.t), r.intersected->get_normal(), l, r.intersected, r.direction);
   }
-  get_color_from_float3(finalColor, d_out + index);
-  //printf("T[%d][%d][%d][%d], c=%d\n", blockIdx.x,blockIdx.y,threadIdx.x,threadIdx.y, d_out + index);
-  //else get_color_from_float3()
+  else
+  {
+    // Do something
+  }
+
+  out_color[index] = finalColor;
+};
+
+///////////////////////////////////////////////////////////////////
+// Convert to RGBA kernel
+// Parameters:
+// color = Color array in floats 
+// d_out = Output array as RGBA unsigned char
+// w = width
+// h = height
+//////////////////////////////////////////////////////////////////
+__global__ void convert_to_rgba(float3 *color, uchar4* d_out, int w, int h)
+{
+    int i = blockDim.x * blockIdx.x + threadIdx.x;
+    int j = blockDim.y * blockIdx.y + threadIdx.y;
+    
+    int index = i + j*w; // 1D indexing
+    get_color_from_float3(color[index],d_out + index);
 }
 
 int damnCeil(int num, int den) {
@@ -116,7 +158,7 @@ __global__ void get_bounds(float * xmin, float * xmax, float * ymin, float * yma
   int idx = blockDim.x * blockIdx.x + threadIdx.x;
   if(idx < num_triangles) {
     triangles[idx].getWorldBound(xmin[idx], xmax[idx], ymin[idx], ymax[idx], zmin[idx], zmax[idx]);
-  }
+}
 }
 
 __global__ void count_sizes(UniformGrid * ug, Triangle * triangles, int num_triangles) {
@@ -139,10 +181,10 @@ __global__ void count_sizes(UniformGrid * ug, Triangle * triangles, int num_tria
           for(int x = vxmin; x <= vxmax; x++) {
             int o = ug->offset(x, y, z);
             atomicAdd(&(ug->voxel_sizes[o]), 1);
-          }
         }
-      }
-  }
+    }
+}
+}
 }
 
 __global__ void reserve_space(UniformGrid * ug, int nv) {
@@ -181,11 +223,11 @@ __global__ void build_grid(UniformGrid * ug, Triangle * triangles, int num_trian
         for(int y = vymin; y <= vymax; y++) {
           for(int x = vxmin; x <= vxmax; x++) {
             int o = ug->offset(x, y, z);
-            	ug->voxels[o].addPrimitive(ug, idx);
-          }
+            ug->voxels[o].addPrimitive(ug, idx);
         }
-      }
-  } 
+    }
+}
+} 
 }
 
 class justMax {
@@ -205,6 +247,9 @@ public:
 };
 
 void buildGrid(int w, int h, Triangle * triangles, int num_triangles) {
+  checkCudaErrors(cudaMalloc((void**)&colors, sizeof(float3)*w*h));
+  checkCudaErrors(cudaMalloc((void**)&d_rays, sizeof(Ray)*w*h));
+
   float * xmin, * xmax, * ymin, * ymax, * zmin, * zmax;
   cudaMalloc(&xmin, sizeof(float) * num_triangles);
   cudaMalloc(&xmax, sizeof(float) * num_triangles);
@@ -311,9 +356,16 @@ void buildGrid(int w, int h, Triangle * triangles, int num_triangles) {
 }
 
 void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* triangles, int num_triangles, LightSource* l) {
-  //AMBIENT_COLOR = make_float3()
   const dim3 blockSize(TX, TY);
   const dim3 gridSize = dim3(w/TX,h/TY);
-  raytrace<<<gridSize, blockSize>>>(d_out, w, h, camera, triangles, num_triangles, l, d_uniform_grid);
-//  exit(0);
- }
+  
+  //Start Procedure
+  createRaysAndResetImage<<<gridSize, blockSize>>>(camera, w, h, d_rays, d_out);
+  
+  //Karlo Ray trace 1000 baar yahaan
+  raytrace<<<gridSize, blockSize>>>(colors, NULL, w, h, d_rays, NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  //...
+  
+  //Final Output Array
+  convert_to_rgba<<<gridSize, blockSize>>>(colors, d_out, w, h);
+}   
