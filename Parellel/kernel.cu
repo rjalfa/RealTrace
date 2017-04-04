@@ -17,7 +17,9 @@ unsigned char clip(float x){ return x > 255 ? 255 : (x < 0 ? 0 : x); }
 
 UniformGrid * d_uniform_grid;
 float3* colors = 0;
-Ray* d_rays = 0;
+
+Ray* d_rays[7];
+float* d_coeffs[7];
 
 // kernel function to compute decay and shading
 __device__ void get_color_from_float3(float3 color, uchar4* cell)
@@ -72,6 +74,7 @@ __device__ void intersect(Triangle* triangles, int num_triangles, Ray* r, Unifor
 ////////////////////////////////////////////////////////////////////////////
 __global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_rays, uchar4* d_out)
 {
+    if(!camera || !out_rays || !d_out) return;
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     int j = blockDim.y * blockIdx.y + threadIdx.y;
     float3 pos = camera->get_position();
@@ -104,8 +107,9 @@ __global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_r
 // l = LightSource object
 // ug = UniformGrid object
 ////////////////////////////////////////////////////////////////////////////
-__global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray* rays, Ray* out_rays_reflect, Ray* out_rays_refract, float* out_coeffs_reflect, float* out_coeffs_refract, Triangle* triangles, int num_triangles, LightSource* l, UniformGrid * ug)
+__global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray* rays, Ray* out_rays_reflect, float* out_coeffs_reflect, Ray* out_rays_refract, float* out_coeffs_refract, Triangle* triangles, int num_triangles, LightSource* l, UniformGrid * ug)
 {
+  if(out_color == NULL || rays == NULL) return;
   int i = blockDim.x * blockIdx.x + threadIdx.x;
   int j = blockDim.y * blockIdx.y + threadIdx.y;
   int index = i + j * w;
@@ -144,6 +148,7 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
 //////////////////////////////////////////////////////////////////
 __global__ void convert_to_rgba(float3 *color, uchar4* d_out, int w, int h)
 {
+    if(!color || !d_out) return ;
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     int j = blockDim.y * blockIdx.y + threadIdx.y;
     
@@ -243,8 +248,9 @@ public:
 };
 
 void buildGrid(int w, int h, Triangle * triangles, int num_triangles) {
-  checkCudaErrors(cudaMalloc((void**)&colors, sizeof(float3)*w*h));
-  checkCudaErrors(cudaMalloc((void**)&d_rays, sizeof(Ray)*w*h));
+
+  //checkCudaErrors(cudaMalloc((void**)&colors, sizeof(float3)*w*h));
+  //checkCudaErrors(cudaMalloc((void**)&d_rays[0], sizeof(Ray)*w*h));
 
   float * xmin, * xmax, * ymin, * ymax, * zmin, * zmax;
   cudaMalloc(&xmin, sizeof(float) * num_triangles);
@@ -308,17 +314,54 @@ void buildGrid(int w, int h, Triangle * triangles, int num_triangles) {
   checkCudaErrors(cudaFree(zmax));
 }
 
+void create_space_for_kernels(int w, int h)
+{
+  checkCudaErrors(cudaMalloc((void**)&colors, sizeof(float3)*w*h));
+  for(int i = 0; i < 7; i ++)
+  {
+    checkCudaErrors(cudaMalloc((void**)&d_rays[i], sizeof(Ray)*w*h));
+    if(i) checkCudaErrors(cudaMalloc((void**)&d_coeffs[i], sizeof(float)*w*h));
+  }
+  d_coeffs[0] = NULL;
+}
+
+void free_space_for_kernels()
+{
+  checkCudaErrors(cudaFree(colors));
+  for(int i = 0; i < 7; i ++)
+  {
+    checkCudaErrors(cudaFree(d_rays[i]));
+    if(i) checkCudaErrors(cudaFree(d_coeffs[i]));
+  }
+}
+
 void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* triangles, int num_triangles, LightSource* l) {
   const dim3 blockSize(TX, TY);
   const dim3 gridSize = dim3(w/TX,h/TY);
 
   //Start Procedure
   cudaProfilerStart();
-  createRaysAndResetImage<<<gridSize, blockSize>>>(camera, w, h, d_rays, d_out);
+  createRaysAndResetImage<<<gridSize, blockSize>>>(camera, w, h, d_rays[0], d_out);
   
   //Karlo Ray trace 1000 baar yahaan
-  raytrace<<<gridSize, blockSize>>>(colors, NULL, w, h, d_rays, NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
-  //...
+  //A
+  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[0], w, h, d_rays[0], d_rays[1], d_coeffs[1], d_rays[2], d_coeffs[2], triangles, num_triangles, l, d_uniform_grid);
+  
+  //Run these 2 concurrently
+  //A1
+  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[1], w, h, d_rays[1], d_rays[3], d_coeffs[3], d_rays[4], d_coeffs[4], triangles, num_triangles, l, d_uniform_grid);
+  //A2
+  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[2], w, h, d_rays[2], d_rays[5], d_coeffs[5], d_rays[6], d_coeffs[6], triangles, num_triangles, l, d_uniform_grid);
+  
+  //Run these 4 concurrently
+  //A11
+  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[3], w, h, d_rays[3], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  //A12
+  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[4], w, h, d_rays[4], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  //A21
+  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[5], w, h, d_rays[5], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  //A22
+  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[6], w, h, d_rays[6], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
   
   //Final Output Array
   convert_to_rgba<<<gridSize, blockSize>>>(colors, d_out, w, h);
