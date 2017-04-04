@@ -76,7 +76,7 @@ void render() {
 OPENGL(
 void show_fps(int a)
 {
-  cout << "\rFPS: " << frames;
+  cout << "\rFPS: " << frames * (1000.0 / a);
   frames = 0;
 });
 
@@ -214,6 +214,7 @@ void exitfunc() {
     glDeleteBuffers(1, &pbo);
     glDeleteTextures(1, &tex);
   }
+  cout << endl;
   );
   delete h_light;
   delete h_camera;
@@ -235,7 +236,7 @@ readData(filename);
   glutKeyboardFunc(keyboard);
   glutSpecialFunc(handleSpecialKeypress);
   glutPassiveMotionFunc(mouseMove);
-  glutTimerFunc(1000,show_fps,0);
+  glutTimerFunc(1000,show_fps,1000);
   glutMotionFunc(mouseDrag);
   glutDisplayFunc(display);
   initPixelBuffer();
