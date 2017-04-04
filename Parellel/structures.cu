@@ -135,18 +135,17 @@ __host__ __device__ bool Triangle::intersect(Ray *r)
 }
 
 
-__device__ void Voxel::addPrimitive(UniformGrid * ug, int i) {
-	int req_idx = atomicAdd(&curr_size, 1);
-	ug->index_pool[offset + req_idx] = i;
+__device__ void Voxel::addPrimitive(UniformGrid * ug, int i, int idx) {
+	int req_idx = atomicAdd(&ug->upper_limit[idx], 1);
+	ug->index_pool[req_idx] = i;
 }
 
-__host__ __device__ bool Voxel::intersect(UniformGrid * ug, Triangle * triangles, Ray& ray) {
+__host__ __device__ bool Voxel::intersect(UniformGrid * ug, Triangle * triangles, Ray& ray, int idx) {
+	int low = ug->lower_limit[idx], high = ug->upper_limit[idx];
 	bool hitSomething = false;
-	for(int i = 0; i < max_size; i++) {
-		if(triangles[ug->index_pool[offset + i]].intersect(&ray)) {
-//			ray.setIdx(idx[i]);
+	for(int i = low; i < high; i++) {
+		if(triangles[ug->index_pool[i]].intersect(&ray))
 			hitSomething = true;
-		}
 	}
 	return hitSomething;
 }
@@ -200,10 +199,10 @@ __host__ void UniformGrid::initialize(int num_triangles) {
 		nv *= nVoxels[axis];
 	}
 
-	checkCudaErrors(cudaMalloc(&voxels, sizeof(Voxel) * nv));
-	checkCudaErrors(cudaMalloc(&voxel_sizes, sizeof(int) * nv));
-	checkCudaErrors(cudaMemset(voxels, 0, sizeof(Voxel) * nv));
-	checkCudaErrors(cudaMemset(voxel_sizes, 0, sizeof(int) * nv));
+	checkCudaErrors(cudaMalloc(&lower_limit, sizeof(int) * nv));
+	checkCudaErrors(cudaMalloc(&upper_limit, sizeof(int) * nv));
+	checkCudaErrors(cudaMemset(lower_limit, 0, sizeof(int) * nv));
+	checkCudaErrors(cudaMemset(upper_limit, 0, sizeof(int) * nv));
 }
 
 
@@ -301,11 +300,9 @@ __host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) 
 	for( ; ; ) {
 		// check for intersection in current voxel and advance to next
 		// Voxel * voxel = voxels[offset(pos[0], pos[1], pos[2])];
-		Voxel& voxel = voxels[offset(pos[0], pos[1], pos[2])];
-		if(voxel.max_size != voxel.curr_size)
-			printf("something is wrong with: %d", offset(pos[0], pos[1], pos[2]));
-		if(voxel.max_size != 0)
-			hitSomething |= voxel.intersect(this, triangles, ray);
+		int voxel = offset(pos[0], pos[1], pos[2]);
+
+		hitSomething |= Voxel::intersect(this, triangles, ray, voxel);
 		// advance to next voxel
 		// find stepAxis for stepping to next voxel
 		int bits =  ((nextCrossingT[0] < nextCrossingT[1]) << 2) +
@@ -315,8 +312,7 @@ __host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) 
 		int stepAxis = cmpToAxis[bits];
 
 		pos[stepAxis] += step[stepAxis];
-		if(pos[stepAxis] == out[stepAxis])
-			break;
+		if(pos[stepAxis] == out[stepAxis]) break;
 		if(hitSomething) break;
 		nextCrossingT[stepAxis] += deltaT[stepAxis];
 	}

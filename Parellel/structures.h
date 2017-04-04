@@ -61,14 +61,8 @@ class UniformGrid;
 
 class Voxel {
 public:
-	int curr_size, max_size, offset;
-	__device__ void addPrimitive(UniformGrid * ug, int i);
-	__host__ __device__ bool intersect(UniformGrid * ug, Triangle * triangles, Ray& ray);
-	Voxel() {
-		curr_size = 0;
-		offset = 0;
-		max_size = 0;
-	}
+	__device__ static void addPrimitive(UniformGrid * ug, int i, int idx);
+	__host__ __device__ static bool intersect(UniformGrid * ug, Triangle * triangles, Ray& ray, int idx);
 };
 
 class UniformGrid {
@@ -76,19 +70,17 @@ class UniformGrid {
 	int nVoxels[3];
 	float voxelsPerUnitDist;
 	float width[3], invWidth[3];
-	// thrust::device_vector < Voxel > voxels;
 
 	__host__ __device__ float findVoxelsPerUnitDist(float delta[], int num);
 
 public:
-	int * voxel_sizes, * index_pool;
-	Voxel * voxels;
+	int * index_pool;
+	int * lower_limit, * upper_limit;
 	int nv;
 	BBox bounds;
 	float3 bounds_a[2];
 	UniformGrid() {
-		voxel_sizes = 0;
-		voxels = 0;
+		lower_limit = upper_limit = 0;
 		index_pool = 0;
 		nv = 0;
 		voxelsPerUnitDist = 0;
