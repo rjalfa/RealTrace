@@ -126,13 +126,8 @@ __host__ __device__ bool Triangle::intersect(Ray *r)
 	float t = determinant(vertexA-vertexB,vertexA-vertexC,vertexA-r->origin) / A;
 	if(!(beta > 0.0 && gamma > 0.0 && beta+gamma < 1.0)) return false;
 	if(t < 1e-5) return false;
-	if(!r->has_intersected)	{
+	if((!r->has_intersected) || (r->t > t))	{
 		r->has_intersected = true;
-		r->t = t;
-		r->intersected = this;
-	}
-	else if(r->t > t)
-	{
 		r->t = t;
 		r->intersected = this;
 	}
@@ -141,10 +136,6 @@ __host__ __device__ bool Triangle::intersect(Ray *r)
 
 
 __device__ void Voxel::addPrimitive(UniformGrid * ug, int i) {
-	// cout << p << endl;
-	// idx.push_back(i);
-	// primitives.push_back(p);
-//	printf("%d %d\n", max_size, req_idx);
 	int req_idx = atomicAdd(&curr_size, 1);
 	ug->index_pool[offset + req_idx] = i;
 }
@@ -168,12 +159,8 @@ __host__ __device__ float UniformGrid::findVoxelsPerUnitDist(float delta[], int 
 	return voxelsPerUnitDist;
 }
 
-__host__ __device__ int UniformGrid::posToVoxel(const float3& pos, int axis) {
-	float val;
-	if(axis == 0) val = pos.x;
-	else if(axis == 1) val = pos.y;
-	else val = pos.z;
-	int v = ((val - bounds.axis_min[axis]) * invWidth[axis]);
+__host__ __device__ int UniformGrid::posToVoxel(const float pos_comp, int axis) {
+	int v = ((pos_comp - bounds.axis_min[axis]) * invWidth[axis]);
 	return min(max(v, 0), nVoxels[axis] - 1);
 }
 
@@ -186,18 +173,9 @@ __host__ __device__ inline int UniformGrid::offset(float x, float y, float z) {
 }
 
 __host__ void UniformGrid::initialize(int num_triangles) {
-	// assuming triangle objects do not require more refinements
-	
-	// for(int i = 0; i < p.size(); i++) {
-	// 	for(int j = 0; j < 3; j++) {
-	// 		BBox temp = p[i]->getWorldBound();
-	// 		for(int axis = 0; axis < 3; axis++) {
-	// 			bounds.axis_min[axis] = min(bounds.axis_min[axis], temp.axis_min[axis]);
-	// 			bounds.axis_max[axis] = max(bounds.axis_max[axis], temp.axis_max[axis]);
-	// 		}
-	// 	}
-	// }
-		
+	bounds_a[0] = make_float3(bounds.axis_min[0], bounds.axis_min[1], bounds.axis_min[2]);
+	bounds_a[1] = make_float3(bounds.axis_max[0], bounds.axis_max[1], bounds.axis_max[2]);
+
 	for(int axis = 0; axis < 3; axis++)
 		delta[axis] = (bounds.axis_max[axis] - bounds.axis_min[axis]);
 
@@ -224,28 +202,6 @@ __host__ void UniformGrid::initialize(int num_triangles) {
 	checkCudaErrors(cudaMemset(voxel_sizes, 0, sizeof(int) * nv));
 }
 
-
-//__host__ __device__ void UniformGrid::buildGrid(Triangle * p) {
-//
-//	for(int i = 0; i < num_triangles; i++) {
-//		BBox pb = p[i].getWorldBound();
-//		int vmin[3], vmax[3];
-//		for(int axis = 0; axis < 3; axis++) {
-//			vmin[axis] = posToVoxel(make_float3(pb.axis_min[0], pb.axis_min[1], pb.axis_min[2]), axis);
-//			vmax[axis] = posToVoxel(make_float3(pb.axis_max[0], pb.axis_max[1], pb.axis_max[2]), axis);
-//		}
-//
-//		for(int z = vmin[2]; z <= vmax[2]; z++) {
-//			for(int y = vmin[1]; y <= vmax[1]; y++) {
-//				for(int x = vmin[0]; x <= vmax[0]; x++) {
-//					int o = offset(x, y, z);
-//					int req_idx = atomicAdd(voxels[o].curr_size, 1);
-//					voxels[req_idx].addPrimitive(p[i], i);
-//				}
-//			}
-//		}
-//	}
-//}
 
 __host__ __device__ BBox Triangle::getWorldBound() {
 	BBox temp;
@@ -275,58 +231,35 @@ __host__ __device__ void Triangle::getWorldBound(float& xmin, float& xmax, float
 	}
 }
 
-template <typename T>
-__host__ __device__  inline void do_swap (T& a, T& b)  {
-   T x = a;
-   a = b;
-   b = x;
-}
-
 __host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) {
 	// check ray against overall grid bounds
-//	printf("I have been called!\n");
+
 	float rayT;
-	bool flag = true;
+	float dirx = ray.direction.x, diry = ray.direction.y, dirz = ray.direction.z;
 	{
-		float tmin = (bounds.axis_min[0] - ray.origin.x) / ray.direction.x;
-		float tmax = (bounds.axis_max[0] - ray.origin.x) / ray.direction.x;
-		if(tmin > tmax) do_swap(tmin, tmax);
-		 
-		float tymin = (bounds.axis_min[1] - ray.origin.y) / ray.direction.y;
-		float tymax = (bounds.axis_max[1] - ray.origin.y) / ray.direction.y;
+		float tmin, tmax, tymin, tymax, tzmin, tzmax;
+		bool signx = (dirx < 0), signy = (diry < 0), signz = (dirz < 0);
+		tmin = (bounds_a[signx].x - ray.origin.x) / dirx;
+		tmax = (bounds_a[1 - signx].x - ray.origin.x) / dirx;
+		tymin = (bounds_a[signy].y - ray.origin.y) / diry;
+		tymax = (bounds_a[1 - signy].y - ray.origin.y) / diry;
+		if(tmin > tymax || tymin > tmax) return false;
+		if (tymin > tmin) tmin = tymin;
+		if (tymax < tmax) tmax = tymax;
 
-		if (tymin > tymax) do_swap(tymin, tymax);
+		tzmin = (bounds_a[signz].z - ray.origin.z) / dirz;
+		tzmax = (bounds_a[1 - signz].z - ray.origin.z) / dirz;
 
-		if ((tmin > tymax) || (tymin > tmax)) 
-		    flag = false;
+		if ((tmin > tzmax) || (tzmin > tmax)) return false;
 
-		if (tymin > tmin) 
-		    tmin = tymin; 
+		if (tzmin > tmin) tmin = tzmin;
 
-		if (tymax < tmax) 
-		    tmax = tymax; 
-
-		float tzmin = (bounds.axis_min[2] - ray.origin.z) / ray.direction.z;
-		float tzmax = (bounds.axis_max[2] - ray.origin.z) / ray.direction.z;
-
-		if (tzmin > tzmax) do_swap(tzmin, tzmax);
-
-		if ((tmin > tzmax) || (tzmin > tmax)) 
-		    flag = false;
-
-		if (tzmin > tmin) 
-		    tmin = tzmin; 
-
-		if (tzmax < tmax) 
-		    tmax = tzmax; 
+		if (tzmax < tmax) tmax = tzmax;
 
 		rayT = tmin;
-		if(flag) {
-			ray.strictSetParameter(rayT);
-		}
-	}
+		ray.strictSetParameter(rayT);
 
-	if(!flag) return false;
+	}
 
 	float3 gridIntersectf3 = get_point(&ray, ray.t);
 	float gridIntersect[3];
@@ -342,7 +275,7 @@ __host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) 
 	// set up 3D DDA for ray
 	for(int axis = 0; axis < 3; axis++) {
 		// compute current voxel for axis
-		pos[axis] = posToVoxel(gridIntersectf3, axis);
+		pos[axis] = posToVoxel(gridIntersect[axis], axis);
 		if(direction[axis] >= 0) {
 			// handle ray with positive direction for voxel stepping
 			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis] + 1, axis) - gridIntersect[axis]) / direction[axis];

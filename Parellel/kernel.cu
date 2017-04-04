@@ -127,12 +127,12 @@ __global__ void count_sizes(UniformGrid * ug, Triangle * triangles, int num_tria
       
       int vxmin, vxmax, vymin, vymax, vzmin, vzmax;
 
-      vxmin = ug->posToVoxel(make_float3(xmin, ymin, zmin), 0);
-      vxmax = ug->posToVoxel(make_float3(xmax, ymax, zmax), 0);
-      vymin = ug->posToVoxel(make_float3(xmin, ymin, zmin), 1);
-      vymax = ug->posToVoxel(make_float3(xmax, ymax, zmax), 1);
-      vzmin = ug->posToVoxel(make_float3(xmin, ymin, zmin), 2);
-      vzmax = ug->posToVoxel(make_float3(xmax, ymax, zmax), 2);
+      vxmin = ug->posToVoxel(xmin, 0);
+      vxmax = ug->posToVoxel(xmax, 0);
+      vymin = ug->posToVoxel(ymin, 1);
+      vymax = ug->posToVoxel(ymax, 1);
+      vzmin = ug->posToVoxel(zmin, 2);
+      vzmax = ug->posToVoxel(zmax, 2);
 
       for(int z = vzmin; z <= vzmax; z++) {
         for(int y = vymin; y <= vymax; y++) {
@@ -170,12 +170,12 @@ __global__ void build_grid(UniformGrid * ug, Triangle * triangles, int num_trian
       
       int vxmin, vxmax, vymin, vymax, vzmin, vzmax;
 
-      vxmin = ug->posToVoxel(make_float3(xmin, ymin, zmin), 0);
-      vxmax = ug->posToVoxel(make_float3(xmax, ymax, zmax), 0);
-      vymin = ug->posToVoxel(make_float3(xmin, ymin, zmin), 1);
-      vymax = ug->posToVoxel(make_float3(xmax, ymax, zmax), 1);
-      vzmin = ug->posToVoxel(make_float3(xmin, ymin, zmin), 2);
-      vzmax = ug->posToVoxel(make_float3(xmax, ymax, zmax), 2);
+      vxmin = ug->posToVoxel(xmin, 0);
+      vxmax = ug->posToVoxel(xmax, 0);
+      vymin = ug->posToVoxel(ymin, 1);
+      vymax = ug->posToVoxel(ymax, 1);
+      vzmin = ug->posToVoxel(zmin, 2);
+      vzmax = ug->posToVoxel(zmax, 2);
 
       for(int z = vzmin; z <= vzmax; z++) {
         for(int y = vymin; y <= vymax; y++) {

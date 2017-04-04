@@ -85,6 +85,7 @@ public:
 	Voxel * voxels;
 	int nv;
 	BBox bounds;
+	float3 bounds_a[2];
 	UniformGrid() {
 		voxel_sizes = 0;
 		voxels = 0;
@@ -95,7 +96,7 @@ public:
 	__host__ void initialize(int num_triangles);
 //	__host__ __device__ void buildGrid(Triangle * p);
 	__host__ __device__ bool intersect(Triangle * triangles, Ray& ray);
-	__host__ __device__ int posToVoxel(const float3& pos, int axis);
+	__host__ __device__ int posToVoxel(const float pos_comp, int axis);
 	__host__ __device__ float voxelToPos(int p, int axis);
 	__host__ __device__ int offset(float x, float y, float z);
 };
