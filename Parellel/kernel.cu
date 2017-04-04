@@ -6,6 +6,7 @@
 #include <thrust/scan.h>
 #include "camera.h"
 #include "helper_cuda.h"
+#include "cuda_profiler_api.h"
 #define TX 32
 #define TY 32
 #define AMBIENT_COLOR make_float3(0.8083, 1, 1)
@@ -57,7 +58,6 @@ __device__ void intersect(Triangle* triangles, int num_triangles, Ray* r, Unifor
 //  }
 	ug->intersect(triangles, *r);
 }
-
 
 __global__ void raytrace(uchar4 *d_out, int w, int h, Camera* camera, Triangle* triangles, int num_triangles, LightSource* l, UniformGrid * ug) {
   int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -260,19 +260,14 @@ void buildGrid(int w, int h, Triangle * triangles, int num_triangles) {
   checkCudaErrors(cudaFree(ymax));
   checkCudaErrors(cudaFree(zmin));
   checkCudaErrors(cudaFree(zmax));
-
-//  checkCudaErrors(cudaMemcpy(&h_uniform_grid, d_uniform_grid, sizeof(UniformGrid), cudaMemcpyDeviceToHost));
-//  int voxel_sizes[h_uniform_grid.nv];
-//  checkCudaErrors(cudaMemcpy(voxel_sizes, h_uniform_grid.voxel_sizes, sizeof(voxel_sizes), cudaMemcpyDeviceToHost));
-//  for(int i = 0; i < h_uniform_grid.nv; i++) {
-//	  std::cout << voxel_sizes[i] << endl;
-//  }
 }
 
 void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* triangles, int num_triangles, LightSource* l) {
   //AMBIENT_COLOR = make_float3()
   const dim3 blockSize(TX, TY);
   const dim3 gridSize = dim3(w/TX,h/TY);
+  cudaProfilerStart();
   raytrace<<<gridSize, blockSize>>>(d_out, w, h, camera, triangles, num_triangles, l, d_uniform_grid);
+  cudaProfilerStop();
 //  exit(0);
  }
