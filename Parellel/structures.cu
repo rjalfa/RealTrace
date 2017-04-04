@@ -152,11 +152,15 @@ __host__ __device__ bool Voxel::intersect(UniformGrid * ug, Triangle * triangles
 }
 
 __host__ __device__ float UniformGrid::findVoxelsPerUnitDist(float delta[], int num) {
-	float maxAxis = max(delta[0], max(delta[1], delta[2]));
-	float invMaxWidth = 1.0 / maxAxis;
-	float cubeRoot = 3.0 * pow(num, 1.0 / 3.0);
-	float voxelsPerUnitDist = cubeRoot * invMaxWidth;
-	return voxelsPerUnitDist;
+	float volume = delta[0] * delta[1] * delta[2];
+	float numerator = 5 * num;
+	float cuberoot = pow(numerator / volume, 1.0 / 3.0);
+//	float maxAxis = max(delta[0], max(delta[1], delta[2]));
+//	float invMaxWidth = 1.0 / maxAxis;
+//	float cubeRoot = 3.0 * pow(num, 1.0 / 3.0);
+//	float voxelsPerUnitDist = cubeRoot * invMaxWidth;
+//	return voxelsPerUnitDist
+	return cuberoot;
 }
 
 __host__ __device__ int UniformGrid::posToVoxel(const float pos_comp, int axis) {
@@ -185,8 +189,8 @@ __host__ void UniformGrid::initialize(int num_triangles) {
 	for(int axis = 0; axis < 3; axis++) {
 		nVoxels[axis] = ceil(0.0 + delta[axis] * voxelsPerUnitDist);
 		nVoxels[axis] = max(1, nVoxels[axis]);
-		// 64 is magically determined number, lol
-		nVoxels[axis] = min(nVoxels[axis], 64);
+//		 64 is magically determined number, lol
+//		nVoxels[axis] = min(nVoxels[axis], 64);
 	}
 
 	nv = 1;

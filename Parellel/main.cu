@@ -151,7 +151,8 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
         is >> data;
         stringstream ss(data);
         while(getline(ss, token, '/')) {
-          idx[i].push_back(atoi(token.c_str()));
+        	if(token != "")
+        		idx[i].push_back(atoi(token.c_str()));
         }
       }
       Triangle t;
