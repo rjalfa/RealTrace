@@ -7,6 +7,7 @@
 #include <vector>
 #include <fstream>
 #include <iostream>
+#include <sys/time.h>
 #include <sstream>
 #include <string>
 #ifdef _WIN32
@@ -55,6 +56,23 @@ LightSource* d_light, *h_light;
 int num_triangles;
 Camera *h_camera = NULL,*d_camera = NULL;
 
+void CalculateFrameRate()
+{    
+    static float framesPerSecond    = 0.0f;       // This will store our fps
+    static float lastTime   = 0.0f;       // This will hold the time from the last frame
+    static struct timeval tp;
+    gettimeofday(&tp, NULL);
+    long int ms = tp.tv_sec * 1000 + tp.tv_usec / 1000;  
+    float currentTime = ms * 0.001f;
+    ++framesPerSecond;
+    if( currentTime - lastTime > 1.0f )
+    {
+        lastTime = currentTime;
+        fprintf(stderr, "\rCurrent Frames Per Second: %d\n\n", (int)framesPerSecond);
+        framesPerSecond = 0;
+    }
+}
+
 void render() {
    uchar4 *d_out = 0;
    OPENGL(
@@ -67,6 +85,7 @@ void render() {
    char title[64];
    sprintf(title, "RealTrace [TM] | Real-Time Raytracer | CUDA");
    glutSetWindowTitle(title););
+   CalculateFrameRate();
  }
 
 OPENGL(
