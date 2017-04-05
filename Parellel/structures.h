@@ -7,6 +7,27 @@ using namespace std;
 
 class Triangle;
 
+//Structures
+__host__ __device__ bool operator==(const float3& v1, const float3& v2);
+__host__ __device__ bool operator!=(const float3& v1, const float3& v2);
+__host__ __device__ float3 operator+(const float3& v1, const float3& v2);
+__host__ __device__ float3 operator+(const float3& v1, const double& v2);
+__host__ __device__ float3 operator-(const float3& v1, const float3& v2);
+__host__ __device__ float3 operator-(const float3& v);
+__host__ __device__ float3 operator/(const float3& v, float scalar);
+__host__ __device__ float3 operator*(const float3& v, float scalar);
+__host__ __device__ float3 operator*(float scalar, const float3& v);
+__host__ __device__ float3 operator*(const float3& v, const float3& v1);
+__host__ __device__ float3 reflect(const float3& I, const float3& N);
+__host__ __device__ float squaredlength(const float3& f);
+__host__ __device__ float length(const float3& f);
+__host__ __device__ float3 normalize(const float3& f);
+__host__ __device__ float3 unitVector(const float3& v);
+__host__ __device__ float3 crossProduct(const float3& v1, const float3& v2);
+__host__ __device__ float distance(const float3& v1, const float3& v2);
+__host__ __device__ float dotProduct(const float3& v1, const float3& v2);
+__host__ __device__ float tripleProduct(const float3& v1,const float3& v2,const float3& v3);
+
 struct Ray
 {
 	float3 origin;
@@ -17,6 +38,19 @@ struct Ray
 	__host__ __device__
 	void strictSetParameter(float para) {
 		t = para;
+	}
+	__host__ __device__
+	float3 getPosition() {
+		if(has_intersected) return origin + t*direction;
+		else return make_float3(0,0,0);
+	}
+	__host__ __device__ Ray(float3 origin_p, float3 direction_p)
+	{
+		origin = origin_p;
+		direction = direction_p;
+		has_intersected = false;
+		intersected = 0;
+		t = -1;
 	}
 };
 
@@ -96,25 +130,6 @@ public:
 __host__ __device__ float3 get_light_color(float3 point, float3 normal, LightSource* l, Triangle* t, float3 viewVector);
 
 //Structures
-__host__ __device__ bool operator==(const float3& v1, const float3& v2);
-__host__ __device__ bool operator!=(const float3& v1, const float3& v2);
-__host__ __device__ float3 operator+(const float3& v1, const float3& v2);
-__host__ __device__ float3 operator+(const float3& v1, const double& v2);
-__host__ __device__ float3 operator-(const float3& v1, const float3& v2);
-__host__ __device__ float3 operator-(const float3& v);
-__host__ __device__ float3 operator/(const float3& v, float scalar);
-__host__ __device__ float3 operator*(const float3& v, float scalar);
-__host__ __device__ float3 operator*(float scalar, const float3& v);
-__host__ __device__ float3 operator*(const float3& v, const float3& v1);
-__host__ __device__ float3 reflect(const float3& I, const float3& N);
-__host__ __device__ float squaredlength(const float3& f);
-__host__ __device__ float length(const float3& f);
-__host__ __device__ float3 normalize(const float3& f);
-__host__ __device__ float3 unitVector(const float3& v);
-__host__ __device__ float3 crossProduct(const float3& v1, const float3& v2);
-__host__ __device__ float distance(const float3& v1, const float3& v2);
-__host__ __device__ float dotProduct(const float3& v1, const float3& v2);
-__host__ __device__ float tripleProduct(const float3& v1,const float3& v2,const float3& v3);
 __host__ __device__ float3 get_point(Ray* r, float t);
 
 #endif

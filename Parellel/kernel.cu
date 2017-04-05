@@ -11,9 +11,12 @@
 #define TY 32
 #define AMBIENT_COLOR make_float3(0.8083, 1, 1)
 #define KR 0.4
+#define KT 0.1
+#define EULER_CONSTANT 2.718
+#define eta 1.5
+#define EPSILON 0.0001f
 
-__device__
-unsigned char clip(float x){ return x > 255 ? 255 : (x < 0 ? 0 : x); }
+__device__ unsigned char clip(float x){ return x > 255 ? 255 : (x < 0 ? 0 : x); }
 
 UniformGrid * d_uniform_grid;
 float3* colors = 0;
@@ -28,6 +31,14 @@ __device__ void get_color_from_float3(float3 color, uchar4* cell)
   cell->y = clip(color.y*255);
   cell->z = clip(color.z*255);
   cell->w = 255;
+}
+
+__device__ bool refract(const float3& I,const float3& N, const float e, float3& T)
+{
+  float k = 1.0 - e * e * (1.0 - dotProduct(N, I) * dotProduct(N, I));
+  if(k < 0) return false;
+  T = e * I - (e * dotProduct(N, I) + sqrt(k)) * N;
+  return true;
 }
 
 //Uniform Grid Intersect
@@ -72,7 +83,7 @@ __device__ void intersect(Triangle* triangles, int num_triangles, Ray* r, Unifor
 // out_rays = Output rays
 // d_out = Output image to be resetted
 ////////////////////////////////////////////////////////////////////////////
-__global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_rays, uchar4* d_out)
+__global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_rays, uchar4* d_out, float* d_coeffs[])
 {
     if(!camera || !out_rays || !d_out) return;
     int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -80,14 +91,13 @@ __global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_r
     float3 pos = camera->get_position();
     float3 dir = camera->get_ray_direction(i,j);
     int index = i + j*w; // 1D indexing
-    Ray r;
-    r.origin = pos;
-    r.direction = dir;
-    r.has_intersected = false;
-    r.t = -1;
-    r.intersected = 0;
-    out_rays[index] = r;
+    out_rays[index] = Ray(pos,dir);
     d_out[index] = make_uchar4(0,0,0,0);
+
+    for(int i = 0; i < 7; i ++)
+    {
+      if(i) d_coeffs[i][index] = 0.0;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -113,31 +123,164 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
   int i = blockDim.x * blockIdx.x + threadIdx.x;
   int j = blockDim.y * blockIdx.y + threadIdx.y;
   int index = i + j * w;
-
   //Switches
-  bool in_coeffs_defined = (in_coeffs != NULL);
+  bool in_coeff = (in_coeffs != NULL) ? in_coeffs[index] : 1.00;
+  
+  if(in_coeff < EPSILON || rays[index].direction == make_float3(0,0,0)) return;
+  
   bool can_refract = (out_rays_refract != NULL && out_coeffs_refract != NULL);
   bool can_reflect = (out_rays_reflect != NULL && out_coeffs_reflect != NULL);
-
+  bool will_refract = false;
+  bool will_reflect = false;
   //Get owned ray
-  Ray r = rays[index];
-  intersect(triangles,num_triangles,&r, ug);
-  
+  Ray ray = rays[index];
+  intersect(triangles,num_triangles,&ray, ug);
+  bool reflect_over_refract = false;
   //If only diffuse possible, do one time intersection
   float3 finalColor = make_float3(0,0,0);
-  if(!can_reflect && !can_refract)
-  {
-    if(!r.has_intersected) finalColor = AMBIENT_COLOR;
-    else finalColor = get_light_color(get_point(&r,r.t), r.intersected->get_normal(), l, r.intersected, r.direction);
-  }
+  if(!ray.has_intersected) finalColor = AMBIENT_COLOR;
   else
   {
-    // Do something
-  }
+    float3 I = normalize(ray.direction);
+    float3 N = normalize(ray.intersected->get_normal());
 
-  out_color[index] = finalColor;
+    finalColor = get_light_color(get_point(&ray,ray.t), N, l, ray.intersected, I);
+    if((!can_reflect && !can_refract) || (!will_reflect && !will_refract)) { /* Nothing to do*/ }
+    //Reflect
+    else if(can_reflect && will_reflect)
+    {
+      float3 R = reflect(I,N);
+      Ray reflectedRay(ray.getPosition()+ 1e-4 * R,R);
+      out_rays_reflect[index] = reflectedRay;
+      out_coeffs_reflect[index] = in_coeff * KR;
+      finalColor = finalColor * (1-KR);
+    }
+    else if(can_refract && will_refract)
+    {
+      float c = 0;//,k = 0;
+      float3 R = reflect(I,N);
+      float3 T;
+      if(dotProduct(I,N) < 0)
+      {
+        refract(I,N,eta,T);
+        c = -dotProduct(I,N);
+      }
+      else
+      {
+        //k = 1;
+        //k = make_float3(pow(EULER_CONSTANT,-1.0*0.27*t),pow(EULER_CONSTANT,-1.0*0.45*t),pow(EULER_CONSTANT,-1.0*0.55*t));
+        if(refract(I,-1.0*N,1/eta,T)) c = dotProduct(T,N);
+        else {
+          Ray reflectedRay(ray.getPosition()+ 1e-4 * R,R);
+          out_rays_reflect[index] = reflectedRay;
+          out_coeffs_reflect[index] = in_coeff * KR;
+          finalColor = finalColor * (1-KR);
+          //return k*shade_ray(temp);
+          reflect_over_refract = true;
+        }
+      }
+      if(!reflect_over_refract)
+      {
+        float _R0 = ((eta-1)*(eta-1))/((eta+1)*(eta+1));
+        float _R = _R0 + (1-_R0)*pow(1-c,5);
+        Ray temp1 = Ray(ray.getPosition()+ 1e-4 * R,R);
+        Ray temp2 = Ray(ray.getPosition()+ 1e-4 * T,T);
+        out_rays_reflect[index] = temp1;
+        out_coeffs_reflect[index] = in_coeff * _R;
+        out_rays_refract[index] = temp2;
+        out_coeffs_refract[index] = in_coeff * (1-_R);
+        in_coeff = 0;
+      }
+    }
+  }
+  finalColor = finalColor * in_coeff;
+  atomicAdd(&out_color[index].x, finalColor.x);
+  atomicAdd(&out_color[index].y, finalColor.y);
+  atomicAdd(&out_color[index].z, finalColor.z);
 };
 
+/*
+Color World::shade_ray(Ray ray)
+{
+  if(ray.getLevel() > RECURSION_DEPTH) return background;
+  firstIntersection(ray);
+  if(ray.didHit())
+  {
+    // cout << ray.getDirection() << " " << ray.getIdx() << endl;
+    // cerr << ray.getOrigin() << " " << ray.getDirection() << " " << ray.didHit() << endl;
+    Color shadowColor(0.0,0.0,0.0);
+    bool isShadow = false;
+    //Run Shadow Test
+    const Object* intersectedObject = ray.intersected();
+    for(LightSource* ls : this->lightSourceList) {
+      Ray shadowRay(ray.getPosition()+0.01*(ls->getPosition()-ray.getPosition()),ls->getPosition()-ray.getPosition());
+      firstIntersection(shadowRay);
+      if(shadowRay.didHit()) {
+        isShadow = true;
+        shadowColor = ambient*(intersectedObject->getMaterial()->shade(ray))*(intersectedObject->getMaterial())->ka;
+      }
+    }
+    //..Compute Shade factor due to light
+    Color lightColor(0.0,0.0,0.0);
+    for(LightSource* ls : this->lightSourceList) {
+      // cerr << ray.getOrigin() << " " << ray.getDirection() << " " << ray.didHit() << " ";
+      // cerr << intersectedObject << endl;
+      lightColor = lightColor + get_light_shade(ray.getPosition(),intersectedObject->getNormalAtPosition(ray.getPosition()),*ls,intersectedObject->getMaterial(),ray.getDirection());
+    }
+    lightColor = lightColor + ambient*(intersectedObject->getMaterial()->shade(ray))*(intersectedObject->getMaterial())->ka;
+    //if(shadowEffect) lightColor = lightColor*intersectedObject->getMaterial()->ka;
+    
+    Color finalColor = lightColor;
+    if(isShadow) finalColor = finalColor*(1e-4) + shadowColor*(1 - 1e-4);
+
+    //Reflection
+    auto N = intersectedObject->getNormalAtPosition(ray.getPosition());
+    auto I = ray.getDirection();
+    N.normalize();
+    I.normalize();
+
+    double eta = intersectedObject->getMaterial()->eta;
+    Vector3D T(0.0,0.0,0.0);
+    double t = ray.getParameter();
+    double c = 0;
+    Vector3D k(1.0,1.0,1.0);
+    int level = ray.getLevel();
+    if(intersectedObject->getMaterial()->kr > 0 && intersectedObject->getMaterial()->kt > 0)
+    {
+      //Dielectrics 
+      auto R = reflect(I,N);
+      if(dotProduct(ray.getDirection(),N) < 0)
+      {
+        refract(I,N,eta,T);
+        c = -dotProduct(I,N);
+      }
+      else
+      {
+        k = Vector3D(pow(EULER_CONSTANT,-1.0*0.27*t),pow(EULER_CONSTANT,-1.0*0.45*t),pow(EULER_CONSTANT,-1.0*0.55*t));
+        if(refract(I,-1.0*N,1/eta,T)) c = dotProduct(T,N);
+        else {
+          Ray temp = Ray(ray.getPosition()+ 1e-4 * R,R,level+1);
+          return k*shade_ray(temp);
+        }
+      }
+      double _R0 = ((eta-1)*(eta-1))/((eta+1)*(eta+1));
+      double _R = _R0 + (1-_R0)*pow(1-c,5);
+      Ray temp1 = Ray(ray.getPosition()+ 1e-4 * R,R,level+1);
+      Ray temp2 = Ray(ray.getPosition()+ 1e-4 * T,T,level*2);
+      return k*(_R * shade_ray(temp1) + (1-_R)*shade_ray(temp2));
+    }
+    else if(intersectedObject->getMaterial()->kr > 0)
+    {
+      auto R = reflect(I,N);
+      Ray reflectedRay(ray.getPosition()+ 1e-4 * R,R, level + 1);
+
+      finalColor = finalColor + (intersectedObject->getMaterial()->kr)*shade_ray(reflectedRay);
+    }
+    return finalColor;
+  }
+  return background;
+}
+*/
 ///////////////////////////////////////////////////////////////////
 // Convert to RGBA kernel
 // Parameters:
@@ -317,11 +460,12 @@ void buildGrid(int w, int h, Triangle * triangles, int num_triangles) {
 void create_space_for_kernels(int w, int h)
 {
   checkCudaErrors(cudaMalloc((void**)&colors, sizeof(float3)*w*h));
-  for(int i = 0; i < 7; i ++)
+  checkCudaErrors(cudaMalloc((void**)&d_rays[0], sizeof(Ray)*w*h));
+  /*for(int i = 0; i < 7; i ++)
   {
     checkCudaErrors(cudaMalloc((void**)&d_rays[i], sizeof(Ray)*w*h));
     if(i) checkCudaErrors(cudaMalloc((void**)&d_coeffs[i], sizeof(float)*w*h));
-  }
+  }*/
   d_coeffs[0] = NULL;
 }
 
@@ -341,27 +485,27 @@ void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* trian
 
   //Start Procedure
   cudaProfilerStart();
-  createRaysAndResetImage<<<gridSize, blockSize>>>(camera, w, h, d_rays[0], d_out);
+  createRaysAndResetImage<<<gridSize, blockSize>>>(camera, w, h, d_rays[0], d_out, d_coeffs);
   
   //Karlo Ray trace 1000 baar yahaan
   //A
-  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[0], w, h, d_rays[0], d_rays[1], d_coeffs[1], d_rays[2], d_coeffs[2], triangles, num_triangles, l, d_uniform_grid);
+  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[0], w, h, d_rays[0], NULL, NULL,NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
   
   //Run these 2 concurrently
   //A1
-  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[1], w, h, d_rays[1], d_rays[3], d_coeffs[3], d_rays[4], d_coeffs[4], triangles, num_triangles, l, d_uniform_grid);
+  //raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[1], w, h, d_rays[1], d_rays[3], d_coeffs[3], d_rays[4], d_coeffs[4], triangles, num_triangles, l, d_uniform_grid);
   //A2
-  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[2], w, h, d_rays[2], d_rays[5], d_coeffs[5], d_rays[6], d_coeffs[6], triangles, num_triangles, l, d_uniform_grid);
+  //raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[2], w, h, d_rays[2], d_rays[5], d_coeffs[5], d_rays[6], d_coeffs[6], triangles, num_triangles, l, d_uniform_grid);
   
   //Run these 4 concurrently
   //A11
-  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[3], w, h, d_rays[3], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  //raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[3], w, h, d_rays[3], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
   //A12
-  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[4], w, h, d_rays[4], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  //raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[4], w, h, d_rays[4], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
   //A21
-  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[5], w, h, d_rays[5], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  //raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[5], w, h, d_rays[5], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
   //A22
-  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[6], w, h, d_rays[6], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  //raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[6], w, h, d_rays[6], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
   
   //Final Output Array
   convert_to_rgba<<<gridSize, blockSize>>>(colors, d_out, w, h);

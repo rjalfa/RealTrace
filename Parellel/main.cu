@@ -206,6 +206,7 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
   num_triangles = h_triangles.size();  
   cerr << "[INFO] readData Complete" << endl;
   buildGrid(screen_width, screen_height, d_triangles, num_triangles);
+  create_space_for_kernels(screen_width,screen_height);
 }
 
 void exitfunc() {
@@ -219,6 +220,7 @@ void exitfunc() {
   );
   delete h_light;
   delete h_camera;
+  free_space_for_kernels();
   cudaFree(d_light);
   cudaFree(d_triangles);
   cudaFree(d_camera);
