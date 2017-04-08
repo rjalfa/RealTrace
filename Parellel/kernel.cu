@@ -10,12 +10,12 @@
 #define TX 32
 #define TY 32
 #define AMBIENT_COLOR make_float3(0.8083, 1, 1)
-#define KR 0.4
+#define KR 0.001
 #define KT 0.1
 #define EULER_CONSTANT 2.718
 #define eta 1.5
 #define EPSILON 0.0001f
-
+#define KA 0.4
 __device__ unsigned char clip(float x){ return x > 255 ? 255 : (x < 0 ? 0 : x); }
 
 UniformGrid * d_uniform_grid;
@@ -84,7 +84,7 @@ __device__ void intersect(Triangle* triangles, int num_triangles, Ray* r, Unifor
 // out_rays = Output rays
 // d_out = Output image to be resetted
 ////////////////////////////////////////////////////////////////////////////
-__global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_rays, uchar4* d_out, float* d_coeffs[7])
+__global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_rays, uchar4* d_out, float* d_coeffs[7], float3* out_color)
 {
     if(!camera || !out_rays || !d_out) return;
     int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -95,6 +95,7 @@ __global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_r
     out_rays[index] = Ray(pos,dir);
     d_out[index] = make_uchar4(0,0,0,0);
     
+    out_color[index] = make_float3(0,0,0);
     for(int i = 1; i < 7; i ++)
     {
       if(d_coeffs[i] != NULL) d_coeffs[i][index] = 0.0f;
@@ -131,7 +132,7 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
   
   bool can_refract = (out_rays_refract != NULL && out_coeffs_refract != NULL);
   bool can_reflect = (out_rays_reflect != NULL && out_coeffs_reflect != NULL);
-  bool will_refract = false;
+  bool will_refract = true;
   bool will_reflect = false;
   //Get owned ray
   Ray ray = rays[index];
@@ -146,7 +147,7 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
     float3 N = normalize(ray.intersected->get_normal());
 
     finalColor = get_light_color(get_point(&ray,ray.t), N, l, ray.intersected, I);
-    
+    finalColor = finalColor + make_float3(1.0,0.0,0.0) * KA;
     if((!can_reflect && !can_refract) || (!will_reflect && !will_refract)) {  }
     //Reflect
     else if(can_reflect && will_reflect)
@@ -197,10 +198,10 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
 
   }
   finalColor = finalColor * in_coeff;
-  out_color[index] = finalColor;
-  //atomicAdd(&out_color[index].x, finalColor.x);
-  //atomicAdd(&out_color[index].y, finalColor.y);
-  //atomicAdd(&out_color[index].z, finalColor.z);
+  // out_color[index] = finalColor;
+  atomicAdd(&out_color[index].x, finalColor.x);
+  atomicAdd(&out_color[index].y, finalColor.y);
+  atomicAdd(&out_color[index].z, finalColor.z);
 };
 
 /*
@@ -492,7 +493,7 @@ void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* trian
 
   //Start Procedure
   cudaProfilerStart();
-  createRaysAndResetImage<<<gridSize, blockSize>>>(camera, w, h, d_rays[0], d_out, d_d_coeffs);
+  createRaysAndResetImage<<<gridSize, blockSize>>>(camera, w, h, d_rays[0], d_out, d_d_coeffs, colors);
   
   //Karlo Ray trace 1000 baar yahaan
   //A
