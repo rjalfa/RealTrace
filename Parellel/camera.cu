@@ -39,9 +39,16 @@ __host__ __device__ const float3 Camera::get_ray_direction(const int i, const in
 	return normalize(dir);
 }
 
-void Camera::setCameraPosition(float3 pos)
+void Camera::setCameraVariables(const float3& _pos, const float3& _target, const float3& _up, float _fovy, int _width, int _height)
 {
-	position = pos;
+
+	position = _pos;
+	up = _up;
+	target = _target;
+	fovy = _fovy;
+	width = _width;
+	height = _height;
+
 	up = normalize(up);
 
 	line_of_sight = target - position;

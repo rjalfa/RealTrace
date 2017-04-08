@@ -23,6 +23,7 @@ float3* colors = 0;
 
 Ray* d_rays[7];
 float* d_coeffs[7];
+float** d_d_coeffs = NULL;
 
 // kernel function to compute decay and shading
 __device__ void get_color_from_float3(float3 color, uchar4* cell)
@@ -83,7 +84,7 @@ __device__ void intersect(Triangle* triangles, int num_triangles, Ray* r, Unifor
 // out_rays = Output rays
 // d_out = Output image to be resetted
 ////////////////////////////////////////////////////////////////////////////
-__global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_rays, uchar4* d_out, float* d_coeffs[])
+__global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_rays, uchar4* d_out, float* d_coeffs[7])
 {
     if(!camera || !out_rays || !d_out) return;
     int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -93,10 +94,10 @@ __global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_r
     int index = i + j*w; // 1D indexing
     out_rays[index] = Ray(pos,dir);
     d_out[index] = make_uchar4(0,0,0,0);
-
-    for(int i = 0; i < 7; i ++)
+    
+    for(int i = 1; i < 7; i ++)
     {
-      if(i) d_coeffs[i][index] = 0.0;
+      if(d_coeffs[i] != NULL) d_coeffs[i][index] = 0.0f;
     }
 }
 
@@ -145,7 +146,8 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
     float3 N = normalize(ray.intersected->get_normal());
 
     finalColor = get_light_color(get_point(&ray,ray.t), N, l, ray.intersected, I);
-    if((!can_reflect && !can_refract) || (!will_reflect && !will_refract)) { /* Nothing to do*/ }
+    
+    if((!can_reflect && !can_refract) || (!will_reflect && !will_refract)) {  }
     //Reflect
     else if(can_reflect && will_reflect)
     {
@@ -192,11 +194,13 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
         in_coeff = 0;
       }
     }
+
   }
   finalColor = finalColor * in_coeff;
-  atomicAdd(&out_color[index].x, finalColor.x);
-  atomicAdd(&out_color[index].y, finalColor.y);
-  atomicAdd(&out_color[index].z, finalColor.z);
+  out_color[index] = finalColor;
+  //atomicAdd(&out_color[index].x, finalColor.x);
+  //atomicAdd(&out_color[index].y, finalColor.y);
+  //atomicAdd(&out_color[index].z, finalColor.z);
 };
 
 /*
@@ -460,13 +464,15 @@ void buildGrid(int w, int h, Triangle * triangles, int num_triangles) {
 void create_space_for_kernels(int w, int h)
 {
   checkCudaErrors(cudaMalloc((void**)&colors, sizeof(float3)*w*h));
-  checkCudaErrors(cudaMalloc((void**)&d_rays[0], sizeof(Ray)*w*h));
-  /*for(int i = 0; i < 7; i ++)
+  //checkCudaErrors(cudaMalloc((void**)&d_rays[0], sizeof(Ray)*w*h));
+  for(int i = 0; i < 7; i ++)
   {
     checkCudaErrors(cudaMalloc((void**)&d_rays[i], sizeof(Ray)*w*h));
     if(i) checkCudaErrors(cudaMalloc((void**)&d_coeffs[i], sizeof(float)*w*h));
-  }*/
+  }
   d_coeffs[0] = NULL;
+  checkCudaErrors(cudaMalloc((void**)&d_d_coeffs, sizeof(float*)*7));
+  checkCudaErrors(cudaMemcpy(d_d_coeffs, d_coeffs, sizeof(float*)*7, cudaMemcpyHostToDevice));
 }
 
 void free_space_for_kernels()
@@ -477,6 +483,7 @@ void free_space_for_kernels()
     checkCudaErrors(cudaFree(d_rays[i]));
     if(i) checkCudaErrors(cudaFree(d_coeffs[i]));
   }
+  checkCudaErrors(cudaFree(d_d_coeffs));
 }
 
 void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* triangles, int num_triangles, LightSource* l) {
@@ -485,27 +492,27 @@ void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* trian
 
   //Start Procedure
   cudaProfilerStart();
-  createRaysAndResetImage<<<gridSize, blockSize>>>(camera, w, h, d_rays[0], d_out, d_coeffs);
+  createRaysAndResetImage<<<gridSize, blockSize>>>(camera, w, h, d_rays[0], d_out, d_d_coeffs);
   
   //Karlo Ray trace 1000 baar yahaan
   //A
-  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[0], w, h, d_rays[0], NULL, NULL,NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[0], w, h, d_rays[0], d_rays[1], d_coeffs[1], d_rays[2], d_coeffs[2], triangles, num_triangles, l, d_uniform_grid);
   
   //Run these 2 concurrently
   //A1
-  //raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[1], w, h, d_rays[1], d_rays[3], d_coeffs[3], d_rays[4], d_coeffs[4], triangles, num_triangles, l, d_uniform_grid);
+  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[1], w, h, d_rays[1], d_rays[3], d_coeffs[3], d_rays[4], d_coeffs[4], triangles, num_triangles, l, d_uniform_grid);
   //A2
-  //raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[2], w, h, d_rays[2], d_rays[5], d_coeffs[5], d_rays[6], d_coeffs[6], triangles, num_triangles, l, d_uniform_grid);
+  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[2], w, h, d_rays[2], d_rays[5], d_coeffs[5], d_rays[6], d_coeffs[6], triangles, num_triangles, l, d_uniform_grid);
   
   //Run these 4 concurrently
   //A11
-  //raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[3], w, h, d_rays[3], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[3], w, h, d_rays[3], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
   //A12
-  //raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[4], w, h, d_rays[4], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[4], w, h, d_rays[4], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
   //A21
-  //raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[5], w, h, d_rays[5], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[5], w, h, d_rays[5], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
   //A22
-  //raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[6], w, h, d_rays[6], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[6], w, h, d_rays[6], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
   
   //Final Output Array
   convert_to_rgba<<<gridSize, blockSize>>>(colors, d_out, w, h);

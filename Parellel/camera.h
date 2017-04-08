@@ -23,7 +23,8 @@ public:
 	~Camera();
 	__host__ __device__ const float3 get_ray_direction(const int i, const int j) const;
 	__host__ __device__ const float3& get_position() const { return position; }
-	void setCameraPosition(float3 position);
+	void setCameraVariables(const float3& _pos, const float3& _target, const float3& _up, float _fovy, int _width, int _height);
+	//void setCameraPosition(float3 position);
 	int getWidth() {return width;}
 	int getHeight(){return height;}
 
