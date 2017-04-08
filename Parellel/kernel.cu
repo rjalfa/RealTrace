@@ -478,11 +478,11 @@ void create_space_for_kernels(int w, int h)
 
 void free_space_for_kernels()
 {
-  checkCudaErrors(cudaFree(colors));
+  //if(colors) checkCudaErrors(cudaFree(colors));
   for(int i = 0; i < 7; i ++)
   {
     checkCudaErrors(cudaFree(d_rays[i]));
-    if(i) checkCudaErrors(cudaFree(d_coeffs[i]));
+    if(i && d_coeffs[i]) checkCudaErrors(cudaFree(d_coeffs[i]));
   }
   checkCudaErrors(cudaFree(d_d_coeffs));
 }
@@ -490,7 +490,7 @@ void free_space_for_kernels()
 void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* triangles, int num_triangles, LightSource* l) {
   const dim3 blockSize(TX, TY);
   const dim3 gridSize = dim3(w/TX,h/TY);
-
+  
   //Start Procedure
   cudaProfilerStart();
   createRaysAndResetImage<<<gridSize, blockSize>>>(camera, w, h, d_rays[0], d_out, d_d_coeffs, colors);
@@ -501,9 +501,23 @@ void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* trian
   
   //Run these 2 concurrently
   //A1
-  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[1], w, h, d_rays[1], d_rays[3], d_coeffs[3], d_rays[4], d_coeffs[4], triangles, num_triangles, l, d_uniform_grid);
+  cudaStream_t streamA1, streamA2;
+  cudaEvent_t eventA1, eventA2;
+  cudaStreamCreate(&streamA1);
+  cudaStreamCreate(&streamA2);
+  cudaEventCreateWithFlags(&eventA1, cudaEventDisableTiming);
+  cudaEventCreateWithFlags(&eventA2, cudaEventDisableTiming);
+  cudaEventRecord(eventA1,streamA1);
+  cudaEventRecord(eventA2,streamA2);
+  raytrace<<<gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[1], w, h, d_rays[1], d_rays[3], d_coeffs[3], d_rays[4], d_coeffs[4], triangles, num_triangles, l, d_uniform_grid);
   //A2
-  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[2], w, h, d_rays[2], d_rays[5], d_coeffs[5], d_rays[6], d_coeffs[6], triangles, num_triangles, l, d_uniform_grid);
+  raytrace<<<gridSize, blockSize, 0, streamA2>>>(colors, d_coeffs[2], w, h, d_rays[2], d_rays[5], d_coeffs[5], d_rays[6], d_coeffs[6], triangles, num_triangles, l, d_uniform_grid);
+  cudaEventSynchronize(eventA1);
+  cudaEventSynchronize(eventA2);
+  cudaStreamDestroy(streamA1);
+  cudaStreamDestroy(streamA2);
+  cudaEventDestroy(eventA1);
+  cudaEventDestroy(eventA2);
   
   //Run these 4 concurrently
   //A11

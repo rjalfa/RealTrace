@@ -24,11 +24,11 @@
 #define DEFAULT_COLOR make_float3(0.8,0.7,0.0)
 #include <cuda_runtime.h>
 #include "helper_cuda.h"
+#include "interactive_camera.h"
+#include "interactions.h"
 #ifndef _NO_OPENGL
 #include <cuda_gl_interop.h>
 #include "helper_cuda_gl.h"
-#include "interactive_camera.h"
-#include "interactions.h"
 #include "helper_gl.h"
 #endif
 #ifndef _NO_OPENGL
@@ -223,7 +223,7 @@ void exitfunc() {
   delete h_light;
   delete h_camera;
   delete interaction;
-  free_space_for_kernels();
+  // free_space_for_kernels();
   cudaFree(d_light);
   cudaFree(d_triangles);
   cudaFree(d_camera);
