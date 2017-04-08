@@ -24,6 +24,9 @@ float3* colors = 0;
 Ray* d_rays[7];
 float* d_coeffs[7];
 float** d_d_coeffs = NULL;
+cudaEvent_t event;
+cudaStream_t streamA1, streamA2, streamA3, streamA4;
+
 
 // kernel function to compute decay and shading
 __device__ void get_color_from_float3(float3 color, uchar4* cell)
@@ -464,6 +467,7 @@ void buildGrid(int w, int h, Triangle * triangles, int num_triangles) {
 
 void create_space_for_kernels(int w, int h)
 {
+
   checkCudaErrors(cudaMalloc((void**)&colors, sizeof(float3)*w*h));
   //checkCudaErrors(cudaMalloc((void**)&d_rays[0], sizeof(Ray)*w*h));
   for(int i = 0; i < 7; i ++)
@@ -471,6 +475,13 @@ void create_space_for_kernels(int w, int h)
     checkCudaErrors(cudaMalloc((void**)&d_rays[i], sizeof(Ray)*w*h));
     if(i) checkCudaErrors(cudaMalloc((void**)&d_coeffs[i], sizeof(float)*w*h));
   }
+
+  cudaEventCreate(&event);
+  cudaStreamCreate(&streamA1);
+  cudaStreamCreate(&streamA2);
+  cudaStreamCreate(&streamA3);
+  cudaStreamCreate(&streamA4);
+  
   d_coeffs[0] = NULL;
   checkCudaErrors(cudaMalloc((void**)&d_d_coeffs, sizeof(float*)*7));
   checkCudaErrors(cudaMemcpy(d_d_coeffs, d_coeffs, sizeof(float*)*7, cudaMemcpyHostToDevice));
@@ -484,6 +495,13 @@ void free_space_for_kernels()
     checkCudaErrors(cudaFree(d_rays[i]));
     if(i && d_coeffs[i]) checkCudaErrors(cudaFree(d_coeffs[i]));
   }
+
+  cudaStreamDestroy(streamA1);
+  cudaStreamDestroy(streamA2);
+  cudaStreamDestroy(streamA3);
+  cudaStreamDestroy(streamA4);
+  cudaEventDestroy(event);
+
   checkCudaErrors(cudaFree(d_d_coeffs));
 }
 
@@ -493,43 +511,38 @@ void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* trian
   
   //Start Procedure
   cudaProfilerStart();
+  
   createRaysAndResetImage<<<gridSize, blockSize>>>(camera, w, h, d_rays[0], d_out, d_d_coeffs, colors);
+  cudaDeviceSynchronize();
   
   //Karlo Ray trace 1000 baar yahaan
   //A
-  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[0], w, h, d_rays[0], d_rays[1], d_coeffs[1], d_rays[2], d_coeffs[2], triangles, num_triangles, l, d_uniform_grid);
+  raytrace<<<gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[0], w, h, d_rays[0], d_rays[1], d_coeffs[1], d_rays[2], d_coeffs[2], triangles, num_triangles, l, d_uniform_grid);
+  //cudaEventRecord(event);
+  cudaDeviceSynchronize();
   
   //Run these 2 concurrently
   //A1
-  cudaStream_t streamA1, streamA2;
-  cudaEvent_t eventA1, eventA2;
-  cudaStreamCreate(&streamA1);
-  cudaStreamCreate(&streamA2);
-  cudaEventCreateWithFlags(&eventA1, cudaEventDisableTiming);
-  cudaEventCreateWithFlags(&eventA2, cudaEventDisableTiming);
-  cudaEventRecord(eventA1,streamA1);
-  cudaEventRecord(eventA2,streamA2);
   raytrace<<<gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[1], w, h, d_rays[1], d_rays[3], d_coeffs[3], d_rays[4], d_coeffs[4], triangles, num_triangles, l, d_uniform_grid);
   //A2
   raytrace<<<gridSize, blockSize, 0, streamA2>>>(colors, d_coeffs[2], w, h, d_rays[2], d_rays[5], d_coeffs[5], d_rays[6], d_coeffs[6], triangles, num_triangles, l, d_uniform_grid);
-  cudaEventSynchronize(eventA1);
-  cudaEventSynchronize(eventA2);
-  cudaStreamDestroy(streamA1);
-  cudaStreamDestroy(streamA2);
-  cudaEventDestroy(eventA1);
-  cudaEventDestroy(eventA2);
+  //cudaEventRecord(event);
+  cudaDeviceSynchronize();
   
   //Run these 4 concurrently
   //A11
-  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[3], w, h, d_rays[3], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  raytrace<<<gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[3], w, h, d_rays[3], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
   //A12
-  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[4], w, h, d_rays[4], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  raytrace<<<gridSize, blockSize, 0, streamA2>>>(colors, d_coeffs[4], w, h, d_rays[4], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
   //A21
-  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[5], w, h, d_rays[5], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  raytrace<<<gridSize, blockSize, 0, streamA3>>>(colors, d_coeffs[5], w, h, d_rays[5], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
   //A22
-  raytrace<<<gridSize, blockSize>>>(colors, d_coeffs[6], w, h, d_rays[6], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  raytrace<<<gridSize, blockSize, 0, streamA4>>>(colors, d_coeffs[6], w, h, d_rays[6], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+  //cudaEventRecord(event);
+  cudaDeviceSynchronize();
   
   //Final Output Array
   convert_to_rgba<<<gridSize, blockSize>>>(colors, d_out, w, h);
+  cudaDeviceSynchronize();
   cudaProfilerStop();
 }

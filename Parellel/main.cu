@@ -57,9 +57,9 @@ int num_triangles;
 Camera *d_camera = NULL;
 
 long frames = 0;
+uchar4 *d_out = 0;
 
 void render() {
-   uchar4 *d_out = 0;
    OPENGL(
    cudaGraphicsMapResources(1, &cuda_pbo_resource, 0);
    cudaGraphicsResourceGetMappedPointer((void **)&d_out, NULL, cuda_pbo_resource););
@@ -117,6 +117,7 @@ void initGLUT(int *argc, char **argv) {
 
 void initPixelBuffer() {
   //cerr << "Hello" << endl;
+  #ifndef _NO_OPENGL
   glGenBuffers(1, &pbo);
   glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
   glBufferData(GL_PIXEL_UNPACK_BUFFER, 4*W*H*sizeof(GLubyte), 0,
@@ -126,6 +127,9 @@ void initPixelBuffer() {
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   cudaGraphicsGLRegisterBuffer(&cuda_pbo_resource, pbo,
                                cudaGraphicsMapFlagsWriteDiscard);
+  #else
+  checkCudaErrors(cudaMalloc((void**)&d_out, uchar4*W*H));
+  #endif
 }
 )
 
@@ -220,13 +224,17 @@ void exitfunc() {
   }
   cout << endl;
   );
+
+  #ifdef _NO_OPENGL
+  checkCudaErrors(cudaFree(d_out));
+  #endif
   delete h_light;
   delete h_camera;
   delete interaction;
   // free_space_for_kernels();
-  cudaFree(d_light);
-  cudaFree(d_triangles);
-  cudaFree(d_camera);
+  checkCudaErrors(cudaFree(d_light));
+  checkCudaErrors(cudaFree(d_triangles));
+  checkCudaErrors(cudaFree(d_camera));
 }
 
 int main(int argc, char** argv) {
