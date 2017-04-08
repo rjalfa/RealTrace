@@ -12,7 +12,7 @@ NVCC_FLAGS = -g -G -Xcompiler "-Wall -Wno-deprecated-declarations -Wno-deprecate
 
 all: main
 
-main: main.o kernel.o structures.o utilities.o camera.o
+main: main.o kernel.o structures.o utilities.o camera.o interactive_camera.o interactions.o
 	$(NVCC) $^ -o $@ $(LDFLAGS) $(EXTRA) --gpu-architecture=compute_35 --gpu-code=sm_35
 
 main.o: main.cu kernel.h interactions.h structures.h
@@ -29,6 +29,12 @@ utilities.o: utilities.cu utilities.h
 
 camera.o: camera.cu camera.h structures.h utilities.h
 	$(NVCC) $(NVCC_FLAGS) -c $< -o $@ $(EXTRA)
+
+interactive_camera.o: interactive_camera.cu interactive_camera.h camera.h 
+	$(NVCC) $(NVCC_FLAGS) -c $< -o $@ $(EXTRA)
+
+interactions.o: interactions.cu interactions.h 
+	$(NVCC) $(NVCC_FLAGS) -c $< -o $@ $(EXTRA) $(LDFLAGS)
 
 clean:
 	-rm -f main main.o kernel.o structures.o utilities.o

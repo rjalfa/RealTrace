@@ -24,10 +24,11 @@
 #define DEFAULT_COLOR make_float3(0.8,0.7,0.0)
 #include <cuda_runtime.h>
 #include "helper_cuda.h"
+#include "interactive_camera.h"
+#include "interactions.h"
 #ifndef _NO_OPENGL
 #include <cuda_gl_interop.h>
 #include "helper_cuda_gl.h"
-#include "interactions.h"
 #include "helper_gl.h"
 #endif
 #ifndef _NO_OPENGL
@@ -36,7 +37,7 @@
 #define OPENGL(X) 
 #endif
 
-#define SCALING_FACTOR 15
+#define SCALING_FACTOR 0.5
 
 using namespace std;
  // texture and pixel objects
@@ -49,12 +50,11 @@ int num_max = 10000000;
 int screen_width = 512;
 int screen_height = 512;
 
-
 Triangle* d_triangles;
 std::vector<Triangle> h_triangles;
 LightSource* d_light, *h_light;
 int num_triangles;
-Camera *h_camera = NULL,*d_camera = NULL;
+Camera *d_camera = NULL;
 
 long frames = 0;
 
@@ -96,10 +96,11 @@ void drawTexture() {
 int theta = 0;
 void display() {
   //fprintf(stderr,"Reder Func\n");
-  theta = (theta + 10)%360;
-  float3 camera_position = make_float3(60*cos((theta * 3.141592)/180.0), 60*sin((theta * 3.141592)/180.0), 0);
+  //theta = (theta + 10)%360;
+  //float3 camera_position = make_float3(60*cos((theta * 3.141592)/180.0), 0, 60*sin((theta * 3.141592)/180.0));
   //printf("Camera Add: %p\n", h_camera);
-  h_camera->setCameraPosition(camera_position);
+  interaction->buildRenderCamera(h_camera);
+  //h_camera->setCameraPosition(camera_position);
   checkCudaErrors(cudaMemcpy(d_camera,h_camera,sizeof(Camera), cudaMemcpyHostToDevice));
   render();
   drawTexture();
@@ -179,12 +180,13 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
   }
   is.close();
 
-  float3 camera_position = make_float3(60, 60, 0);
+  float3 camera_position = make_float3(60, 0, 60);
   float3 camera_target = make_float3(0, 0, 0); //Looking down -Z axis
-  float3 camera_up = make_float3(0, 0, 1);
+  float3 camera_up = make_float3(0, -1, 0);
   float camera_fovy =  45;
   h_camera = new Camera(camera_position, camera_target, camera_up, camera_fovy, screen_width, screen_height);
-  
+  interaction = new InteractiveCamera();
+  interaction->buildRenderCamera(h_camera);
 
   //Create Light Source
   h_light = new LightSource;
@@ -206,6 +208,7 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
   num_triangles = h_triangles.size();  
   cerr << "[INFO] readData Complete" << endl;
   buildGrid(screen_width, screen_height, d_triangles, num_triangles);
+  create_space_for_kernels(screen_width,screen_height);
 }
 
 void exitfunc() {
@@ -219,6 +222,8 @@ void exitfunc() {
   );
   delete h_light;
   delete h_camera;
+  delete interaction;
+  // free_space_for_kernels();
   cudaFree(d_light);
   cudaFree(d_triangles);
   cudaFree(d_camera);
@@ -235,10 +240,10 @@ readData(filename);
   initGLUT(&argc, argv);
   gluOrtho2D(0, W, H, 0);
   glutKeyboardFunc(keyboard);
-  glutSpecialFunc(handleSpecialKeypress);
-  glutPassiveMotionFunc(mouseMove);
+  // glutSpecialFunc(handleSpecialKeypress);
+  glutMotionFunc(motion);
+  glutMouseFunc(mouse);
   glutTimerFunc(1000,show_fps,1000);
-  glutMotionFunc(mouseDrag);
   glutDisplayFunc(display);
   initPixelBuffer();
   glutMainLoop();
