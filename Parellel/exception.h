@@ -24,37 +24,37 @@
 template<class Std_Exception>
 class Exception : public Std_Exception
 {
-    public:
+public:
 
-        //! @brief Static construction interface
-        //! @return Alwayss throws ( Located_Exception<Exception>)
-        //! @param file file in which the Exception occurs
-        //! @param line line in which the Exception occurs
-        //! @param detailed details on the code fragment causing the Exception
-        static void throw_it(const char *file,
-                             const int line,
-                             const char *detailed = "-");
+	//! @brief Static construction interface
+	//! @return Alwayss throws ( Located_Exception<Exception>)
+	//! @param file file in which the Exception occurs
+	//! @param line line in which the Exception occurs
+	//! @param detailed details on the code fragment causing the Exception
+	static void throw_it(const char *file,
+						 const int line,
+						 const char *detailed = "-");
 
-        //! Static construction interface
-        //! @return Alwayss throws ( Located_Exception<Exception>)
-        //! @param file file in which the Exception occurs
-        //! @param line line in which the Exception occurs
-        //! @param detailed details on the code fragment causing the Exception
-        static void throw_it(const char *file,
-                             const int line,
-                             const std::string &detailed);
+	//! Static construction interface
+	//! @return Alwayss throws ( Located_Exception<Exception>)
+	//! @param file file in which the Exception occurs
+	//! @param line line in which the Exception occurs
+	//! @param detailed details on the code fragment causing the Exception
+	static void throw_it(const char *file,
+						 const int line,
+						 const std::string &detailed);
 
-        //! Destructor
-        virtual ~Exception() throw();
+	//! Destructor
+	virtual ~Exception() throw();
 
-    private:
+private:
 
-        //! Constructor, default (private)
-        Exception();
+	//! Constructor, default (private)
+	Exception();
 
-        //! Constructor, standard
-        //! @param str string returned by what()
-        Exception(const std::string &str);
+	//! Constructor, standard
+	//! @param str string returned by what()
+	Exception(const std::string &str);
 
 };
 
@@ -66,24 +66,24 @@ template<class Exception_Typ>
 inline void
 handleException(const Exception_Typ &ex)
 {
-    std::cerr << ex.what() << std::endl;
+	std::cerr << ex.what() << std::endl;
 
-    exit(EXIT_FAILURE);
+	exit(EXIT_FAILURE);
 }
 
 //! Convenience macros
 
 //! Exception caused by dynamic program behavior, e.g. file does not exist
 #define RUNTIME_EXCEPTION( msg) \
-    Exception<std::runtime_error>::throw_it( __FILE__, __LINE__, msg)
+	Exception<std::runtime_error>::throw_it( __FILE__, __LINE__, msg)
 
 //! Logic exception in program, e.g. an assert failed
 #define LOGIC_EXCEPTION( msg) \
-    Exception<std::logic_error>::throw_it( __FILE__, __LINE__, msg)
+	Exception<std::logic_error>::throw_it( __FILE__, __LINE__, msg)
 
 //! Out of range exception
 #define RANGE_EXCEPTION( msg) \
-    Exception<std::range_error>::throw_it( __FILE__, __LINE__, msg)
+	Exception<std::range_error>::throw_it( __FILE__, __LINE__, msg)
 
 ////////////////////////////////////////////////////////////////////////////////
 //! Implementation
@@ -100,14 +100,14 @@ void
 Exception<Std_Exception>::
 throw_it(const char *file, const int line, const char *detailed)
 {
-    std::stringstream s;
+	std::stringstream s;
 
-    // Quiet heavy-weight but exceptions are not for
-    // performance / release versions
-    s << "Exception in file '" << file << "' in line " << line << "\n"
-      << "Detailed description: " << detailed << "\n";
+	// Quiet heavy-weight but exceptions are not for
+	// performance / release versions
+	s << "Exception in file '" << file << "' in line " << line << "\n"
+	  << "Detailed description: " << detailed << "\n";
 
-    throw Exception(s.str());
+	throw Exception(s.str());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -119,7 +119,7 @@ void
 Exception<Std_Exception>::
 throw_it(const char *file, const int line, const std::string &msg)
 {
-    throw_it(file, line, msg.c_str());
+	throw_it(file, line, msg.c_str());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -127,7 +127,7 @@ throw_it(const char *file, const int line, const std::string &msg)
 ////////////////////////////////////////////////////////////////////////////////
 template<class Std_Exception>
 Exception<Std_Exception>::Exception() :
-    Std_Exception("Unknown Exception.\n")
+	Std_Exception("Unknown Exception.\n")
 { }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -136,7 +136,7 @@ Exception<Std_Exception>::Exception() :
 ////////////////////////////////////////////////////////////////////////////////
 template<class Std_Exception>
 Exception<Std_Exception>::Exception(const std::string &s) :
-    Std_Exception(s)
+	Std_Exception(s)
 { }
 
 ////////////////////////////////////////////////////////////////////////////////

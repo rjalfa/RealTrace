@@ -15,32 +15,32 @@ __host__ __device__ bool operator==(const float3& v1, const float3& v2)
 
 __host__ __device__ bool operator!=(const float3& v1, const float3& v2)
 {
-	return !(v1==v2);   
+	return !(v1 == v2);
 }
 
 __host__ __device__ float3 operator+(const float3& v1, const float3& v2)
 {
-	return make_float3(v1.x+v2.x, v1.y+v2.y, v1.z+v2.z);
+	return make_float3(v1.x + v2.x, v1.y + v2.y, v1.z + v2.z);
 }
 
 __host__ __device__ float3 operator+(const float3& v1, const double& v2)
 {
-	return make_float3(v1.x+v2, v1.y + v2, v1.z + v2);
+	return make_float3(v1.x + v2, v1.y + v2, v1.z + v2);
 }
 
 __host__ __device__ float3 operator-(const float3& v1, const float3& v2)
 {
-	return make_float3(v1.x-v2.x, v1.y-v2.y, v1.z-v2.z);   
+	return make_float3(v1.x - v2.x, v1.y - v2.y, v1.z - v2.z);
 }
 
 __host__ __device__ float3 operator/(const float3& v, float scalar)
 {
-	return make_float3(v.x/scalar, v.y/scalar, v.z/scalar);   
+	return make_float3(v.x / scalar, v.y / scalar, v.z / scalar);
 }
 
 __host__ __device__ float3 operator*(const float3& v, float scalar)
 {
-	return make_float3(v.x*scalar, v.y*scalar, v.z*scalar);       
+	return make_float3(v.x * scalar, v.y * scalar, v.z * scalar);
 }
 
 //Unary
@@ -51,17 +51,17 @@ __host__ __device__ float3 operator-(const float3& v)
 
 __host__ __device__ float3 operator*(float scalar, const float3& v)
 {
-	return v*scalar;       
+	return v * scalar;
 }
 
 __host__ __device__ float3 operator*(const float3& v, const float3& v1)
 {
-	return make_float3(v.x*v1.x, v.y*v1.y, v.z*v1.z);
+	return make_float3(v.x * v1.x, v.y * v1.y, v.z * v1.z);
 }
 
 __host__ __device__ float squaredlength(const float3& f)
-{ 
-	return (f.x*f.x + f.y*f.y + f.z*f.z);
+{
+	return (f.x * f.x + f.y * f.y + f.z * f.z);
 }
 
 __host__ __device__ float length(const float3& f)
@@ -82,25 +82,25 @@ __host__ __device__ float3 unitVector(const float3& v)
 
 __host__ __device__ float3 get_point(Ray* r, float t)
 {
-	return r->origin + t*r->direction;
+	return r->origin + t * r->direction;
 }
 
 __host__ __device__ float dotProduct(const float3& v1, const float3& v2)
-{ return v1.x*v2.x + v1.y*v2.y + v1.z*v2.z; }
+{ return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z; }
 
-__host__ __device__ float tripleProduct(const float3& v1,const float3& v2,const float3& v3)
+__host__ __device__ float tripleProduct(const float3& v1, const float3& v2, const float3& v3)
 {
-	return dotProduct(( crossProduct(v1, v2)), v3);   
+	return dotProduct(( crossProduct(v1, v2)), v3);
 }
 
 __host__ __device__ float distance(const float3& v1, const float3& v2)
 {
-	return sqrt(0.0 + (v1.x-v2.x)*(v1.x-v2.x) + (v1.y-v2.y)*(v1.y-v2.y) + (v1.z-v2.z)*(v1.z-v2.z));
+	return sqrt(0.0 + (v1.x - v2.x) * (v1.x - v2.x) + (v1.y - v2.y) * (v1.y - v2.y) + (v1.z - v2.z) * (v1.z - v2.z));
 }
 
 __host__ __device__ float3 reflect(const float3& I, const float3& N)
 {
-	return I - 2.0f*dotProduct(N,I)*N;
+	return I - 2.0f * dotProduct(N, I) * N;
 }
 
 __host__ __device__ float3 crossProduct(const float3& v1, const float3& v2)
@@ -109,24 +109,24 @@ __host__ __device__ float3 crossProduct(const float3& v1, const float3& v2)
 	tmp.x = v1.y * v2.z - v1.z * v2.y;
 	tmp.y = v1.z * v2.x - v1.x * v2.z;
 	tmp.z = v1.x * v2.y - v1.y * v2.x;
-	return tmp; 
+	return tmp;
 }
 
 __host__ __device__ float3 Triangle::get_normal()
 {
-	return crossProduct(vertexA-vertexB,vertexA-vertexC);
+	return crossProduct(vertexA - vertexB, vertexA - vertexC);
 }
 
 __host__ __device__ bool Triangle::intersect(Ray *r)
 {
-	float A = determinant(vertexA-vertexB,vertexA-vertexC,r->direction);
-	if(abs((double) A) < EPSILON) return false;
-	float beta = determinant(vertexA-r->origin,vertexA-vertexC,r->direction) / A;
-	float gamma = determinant(vertexA-vertexB,vertexA-r->origin,r->direction) / A;
-	float t = determinant(vertexA-vertexB,vertexA-vertexC,vertexA-r->origin) / A;
-	if(!(beta > 0.0 && gamma > 0.0 && beta+gamma < 1.0)) return false;
-	if(t < 1e-5) return false;
-	if((!r->has_intersected) || (r->t > t))	{
+	float A = determinant(vertexA - vertexB, vertexA - vertexC, r->direction);
+	if (abs((double) A) < EPSILON) return false;
+	float beta = determinant(vertexA - r->origin, vertexA - vertexC, r->direction) / A;
+	float gamma = determinant(vertexA - vertexB, vertexA - r->origin, r->direction) / A;
+	float t = determinant(vertexA - vertexB, vertexA - vertexC, vertexA - r->origin) / A;
+	if (!(beta > 0.0 && gamma > 0.0 && beta + gamma < 1.0)) return false;
+	if (t < 1e-5) return false;
+	if ((!r->has_intersected) || (r->t > t))	{
 		r->has_intersected = true;
 		r->t = t;
 		r->intersected = this;
@@ -143,8 +143,8 @@ __device__ void Voxel::addPrimitive(UniformGrid * ug, int i, int idx) {
 __host__ __device__ bool Voxel::intersect(UniformGrid * ug, Triangle * triangles, Ray& ray, int idx) {
 	int low = ug->lower_limit[idx], high = ug->upper_limit[idx];
 	bool hitSomething = false;
-	for(int i = low; i < high; i++) {
-		if(triangles[ug->index_pool[i]].intersect(&ray))
+	for (int i = low; i < high; i++) {
+		if (triangles[ug->index_pool[i]].intersect(&ray))
 			hitSomething = true;
 	}
 	return hitSomething;
@@ -179,13 +179,13 @@ __host__ void UniformGrid::initialize(int num_triangles) {
 	bounds_a[0] = make_float3(bounds.axis_min[0], bounds.axis_min[1], bounds.axis_min[2]);
 	bounds_a[1] = make_float3(bounds.axis_max[0], bounds.axis_max[1], bounds.axis_max[2]);
 
-	for(int axis = 0; axis < 3; axis++)
+	for (int axis = 0; axis < 3; axis++)
 		delta[axis] = (bounds.axis_max[axis] - bounds.axis_min[axis]);
 
 	// find voxelsPerUnitDist
 	voxelsPerUnitDist = findVoxelsPerUnitDist(delta, num_triangles);
 
-	for(int axis = 0; axis < 3; axis++) {
+	for (int axis = 0; axis < 3; axis++) {
 		nVoxels[axis] = ceil(0.0 + delta[axis] * voxelsPerUnitDist);
 		nVoxels[axis] = max(1, nVoxels[axis]);
 //		 64 is magically determined number, lol
@@ -193,7 +193,7 @@ __host__ void UniformGrid::initialize(int num_triangles) {
 	}
 
 	nv = 1;
-	for(int axis = 0; axis < 3; axis++) {
+	for (int axis = 0; axis < 3; axis++) {
 		width[axis] = delta[axis] / nVoxels[axis];
 		invWidth[axis] = (width[axis] == 0.0) ? 0.0 : 1.0 / width[axis];
 		nv *= nVoxels[axis];
@@ -208,7 +208,7 @@ __host__ void UniformGrid::initialize(int num_triangles) {
 
 __host__ __device__ BBox Triangle::getWorldBound() {
 	BBox temp;
-	for(int vno = 0; vno < 3; vno++) {
+	for (int vno = 0; vno < 3; vno++) {
 		temp.axis_min[0] = min(temp.axis_min[0], getVertex(vno).x);
 		temp.axis_max[0] = max(temp.axis_max[0], getVertex(vno).x);
 		temp.axis_min[1] = min(temp.axis_min[1], getVertex(vno).y);
@@ -224,7 +224,7 @@ __host__ __device__ void Triangle::getWorldBound(float& xmin, float& xmax, float
 //	xmax = ymax = zmax = std::numeric_limits < float >::min();
 	xmin = ymin = zmin = SICK_FLT_MAX;
 	xmax = ymax = zmax = SICK_FLT_MIN;
-	for(int vno = 0; vno < 3; vno++) {
+	for (int vno = 0; vno < 3; vno++) {
 		xmin = min(xmin, getVertex(vno).x);
 		xmax = max(xmax, getVertex(vno).x);
 		ymin = min(ymin, getVertex(vno).y);
@@ -246,7 +246,7 @@ __host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) 
 		tmax = (bounds_a[1 - signx].x - ray.origin.x) / dirx;
 		tymin = (bounds_a[signy].y - ray.origin.y) / diry;
 		tymax = (bounds_a[1 - signy].y - ray.origin.y) / diry;
-		if(tmin > tymax || tymin > tmax) return false;
+		if (tmin > tymax || tymin > tmax) return false;
 		if (tymin > tmin) tmin = tymin;
 		if (tymax < tmax) tmax = tymax;
 
@@ -276,10 +276,10 @@ __host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) 
 	int pos[3], step[3], out[3];
 	float nextCrossingT[3], deltaT[3];
 	// set up 3D DDA for ray
-	for(int axis = 0; axis < 3; axis++) {
+	for (int axis = 0; axis < 3; axis++) {
 		// compute current voxel for axis
 		pos[axis] = posToVoxel(gridIntersect[axis], axis);
-		if(direction[axis] >= 0) {
+		if (direction[axis] >= 0) {
 			// handle ray with positive direction for voxel stepping
 			nextCrossingT[axis] = rayT + (voxelToPos(pos[axis] + 1, axis) - gridIntersect[axis]) / direction[axis];
 			deltaT[axis] = width[axis] / direction[axis];
@@ -297,7 +297,7 @@ __host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) 
 	// walk ray through voxel grid
 	bool hitSomething = false;
 	ray.strictSetParameter(SICK_FLT_MAX);
-	for( ; ; ) {
+	for ( ; ; ) {
 		// check for intersection in current voxel and advance to next
 		// Voxel * voxel = voxels[offset(pos[0], pos[1], pos[2])];
 		int voxel = offset(pos[0], pos[1], pos[2]);
@@ -312,8 +312,8 @@ __host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) 
 		int stepAxis = cmpToAxis[bits];
 
 		pos[stepAxis] += step[stepAxis];
-		if(pos[stepAxis] == out[stepAxis]) break;
-		if(hitSomething) break;
+		if (pos[stepAxis] == out[stepAxis]) break;
+		if (hitSomething) break;
 		nextCrossingT[stepAxis] += deltaT[stepAxis];
 	}
 	return hitSomething;
@@ -323,10 +323,10 @@ __host__ __device__ float3 get_light_color(float3 point, float3 normal, LightSou
 {
 	float3 vLightPosition = l->position;
 	float3 n = normalize(normal);
-	float3 r = normalize(reflect(-normalize(vLightPosition-point),n));
-	float dist = ::distance(point,vLightPosition);
+	float3 r = normalize(reflect(-normalize(vLightPosition - point), n));
+	float dist = ::distance(point, vLightPosition);
 	//float fatt = 1.0 / (1.0 + 0.05*dist);
-	float diffuse = max(dotProduct(n,normalize(vLightPosition)),0.0f);
-	float specular = max(pow(dotProduct(normalize(viewVector),r),128),0.0);
-	return 0.8*diffuse*(l->color)*(t->color) + 0.1*specular*(l->color);
+	float diffuse = max(dotProduct(n, normalize(vLightPosition)), 0.0f);
+	float specular = max(pow(dotProduct(normalize(viewVector), r), 128), 0.0);
+	return 0.8 * diffuse * (l->color) * (t->color) + 0.1 * specular * (l->color);
 }

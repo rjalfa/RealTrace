@@ -2,8 +2,8 @@
 #include "structures.h"
 #include <math.h>
 
-Camera::Camera(const float3& _pos, const float3& _target, const float3& _up, float _fovy, int _width, int _height) : 
-position(_pos), target(_target), up(_up), fovy(_fovy), width(_width), height(_height)
+Camera::Camera(const float3& _pos, const float3& _target, const float3& _up, float _fovy, int _width, int _height) :
+	position(_pos), target(_target), up(_up), fovy(_fovy), width(_width), height(_height)
 {
 	up = normalize(up);
 
@@ -16,9 +16,9 @@ position(_pos), target(_target), up(_up), fovy(_fovy), width(_width), height(_he
 	v = normalize(crossProduct(w, u));
 
 	focalHeight = 1.0; //Let's keep this fixed to 1.0
-	aspect = float(width)/float(height);
+	aspect = float(width) / float(height);
 	focalWidth = focalHeight * aspect; //Height * Aspect ratio
-	focalDistance = focalHeight/(2.0 * tan(fovy * M_PI/(180.0 * 2.0))); //More the fovy, close is focal plane
+	focalDistance = focalHeight / (2.0 * tan(fovy * M_PI / (180.0 * 2.0))); //More the fovy, close is focal plane
 }
 
 Camera::~Camera()
@@ -31,8 +31,8 @@ __host__ __device__ const float3 Camera::get_ray_direction(const int i, const in
 {
 	float3 dir = make_float3(0.0, 0.0, 0.0);
 	dir = dir + (-w * focalDistance);
-	float xw = aspect*(i - width/2.0 + 0.5)/width;
-	float yw = (j - height/2.0 + 0.5)/height;
+	float xw = aspect * (i - width / 2.0 + 0.5) / width;
+	float yw = (j - height / 2.0 + 0.5) / height;
 	dir = dir + u * xw;
 	dir = dir + v * yw;
 
@@ -60,7 +60,7 @@ void Camera::setCameraVariables(const float3& _pos, const float3& _target, const
 	v = normalize(crossProduct(w, u));
 
 	focalHeight = 1.0; //Let's keep this fixed to 1.0
-	aspect = float(width)/float(height);
+	aspect = float(width) / float(height);
 	focalWidth = focalHeight * aspect; //Height * Aspect ratio
-	focalDistance = focalHeight/(2.0 * tan(fovy * M_PI/(180.0 * 2.0)));
+	focalDistance = focalHeight / (2.0 * tan(fovy * M_PI / (180.0 * 2.0)));
 }

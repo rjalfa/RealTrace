@@ -26,7 +26,7 @@ public:
 	void setCameraVariables(const float3& _pos, const float3& _target, const float3& _up, float _fovy, int _width, int _height);
 	//void setCameraPosition(float3 position);
 	int getWidth() {return width;}
-	int getHeight(){return height;}
+	int getHeight() {return height;}
 
 };
 #endif

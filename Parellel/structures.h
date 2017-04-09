@@ -2,7 +2,9 @@
 #define __STRUCTURES_H
 #include <thrust/device_vector.h>
 #include <vector>
-
+#define REFRACTIVE 0
+#define REFLECTIVE 2
+#define DIFFUSE 1
 using namespace std;
 
 class Triangle;
@@ -26,7 +28,7 @@ __host__ __device__ float3 unitVector(const float3& v);
 __host__ __device__ float3 crossProduct(const float3& v1, const float3& v2);
 __host__ __device__ float distance(const float3& v1, const float3& v2);
 __host__ __device__ float dotProduct(const float3& v1, const float3& v2);
-__host__ __device__ float tripleProduct(const float3& v1,const float3& v2,const float3& v3);
+__host__ __device__ float tripleProduct(const float3& v1, const float3& v2, const float3& v3);
 
 struct Ray
 {
@@ -41,8 +43,8 @@ struct Ray
 	}
 	__host__ __device__
 	float3 getPosition() {
-		if(has_intersected) return origin + t*direction;
-		else return make_float3(0,0,0);
+		if (has_intersected) return origin + t * direction;
+		else return make_float3(0, 0, 0);
 	}
 	__host__ __device__ Ray(float3 origin_p, float3 direction_p)
 	{
@@ -75,20 +77,21 @@ public:
 
 class Triangle
 {
-	public:
-		float3 vertexA;
-		float3 vertexB;
-		float3 vertexC;
-		float3 color;
-		__host__ __device__ float3 get_normal();
-		__host__ __device__ bool intersect(Ray *r);
-		__host__ __device__ BBox getWorldBound();
-		__host__ __device__ void getWorldBound(float& xmin, float& xmax, float& ymin, float& ymax, float& zmin, float& zmax);
-		__host__ __device__ float3 getVertex(int vno) {
-			if(vno == 0) return vertexA;
-			else if(vno == 1) return vertexB;
-			else return vertexC;
-		}
+public:
+	float3 vertexA;
+	float3 vertexB;
+	float3 vertexC;
+	float3 color;
+	int type_of_material;
+	__host__ __device__ float3 get_normal();
+	__host__ __device__ bool intersect(Ray *r);
+	__host__ __device__ BBox getWorldBound();
+	__host__ __device__ void getWorldBound(float& xmin, float& xmax, float& ymin, float& ymax, float& zmin, float& zmax);
+	__host__ __device__ float3 getVertex(int vno) {
+		if (vno == 0) return vertexA;
+		else if (vno == 1) return vertexB;
+		else return vertexC;
+	}
 };
 
 class UniformGrid;
