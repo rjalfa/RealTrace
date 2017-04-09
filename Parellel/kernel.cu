@@ -7,6 +7,7 @@
 #include "camera.h"
 #include "helper_cuda.h"
 #include "cuda_profiler_api.h"
+#include "utilities.h"
 #define TX 32
 #define TY 32
 #define AMBIENT_COLOR make_float3(0.8083, 1, 1)
@@ -14,8 +15,8 @@
 #define KT 0.1
 #define EULER_CONSTANT 2.718
 #define eta 1.5
-#define EPSILON 0.0001f
 #define KA 0.4
+
 __device__ unsigned char clip(float x){ return x > 255 ? 255 : (x < 0 ? 0 : x); }
 
 UniformGrid * d_uniform_grid;
@@ -43,6 +44,30 @@ __device__ bool refract(const float3& I,const float3& N, const float e, float3& 
   if(k < 0) return false;
   T = e * I - (e * dotProduct(N, I) + sqrt(k)) * N;
   return true;
+}
+
+__device__ void fresnel(const float3& I, const float3& N, const float& ior, float &kr)
+{
+	float cosi = clamp(-1, 1, dotProduct(I, N)); 
+    float etai = 1, etat = ior; 
+    if (cosi > 0) { 
+    	float t = etai;
+    	etai = etat;
+    	etat = t;
+    } 
+    // Compute sini using Snell's law
+    float sint = etai / etat * sqrtf(max(0.f, 1 - cosi * cosi)); 
+    // Total internal reflection
+    if (sint >= 1) { 
+        kr = 1; 
+    } 
+    else { 
+        float cost = sqrtf(max(0.f, 1 - sint * sint)); 
+        cosi = fabsf(cosi); 
+        float Rs = ((etat * cosi) - (etai * cost)) / ((etat * cosi) + (etai * cost)); 
+        float Rp = ((etai * cosi) - (etat * cost)) / ((etai * cosi) + (etat * cost)); 
+        kr = (Rs * Rs + Rp * Rp) / 2; 
+    } 
 }
 
 //Uniform Grid Intersect
@@ -140,7 +165,7 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
   //Get owned ray
   Ray ray = rays[index];
   intersect(triangles,num_triangles,&ray, ug);
-  bool reflect_over_refract = false;
+  //bool reflect_over_refract = false;
   //If only diffuse possible, do one time intersection
   float3 finalColor = make_float3(0,0,0);
   if(!ray.has_intersected) finalColor = AMBIENT_COLOR;
@@ -163,6 +188,7 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
     }
     else if(can_refract && will_refract)
     {
+      /*
       float c = 0;//,k = 0;
       float3 R = reflect(I,N);
       float3 T;
@@ -197,6 +223,34 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
         out_coeffs_refract[index] = in_coeff * (1-_R);
         in_coeff = 0;
       }
+		*/
+    	float3 refractionColor = make_float3(0,0,0); 
+        // compute fresnel
+        float kr; 
+        float3 hitPoint = ray.getPosition();
+        fresnel(I, N, eta, kr); 
+        bool outside = (dotProduct(I,N) < 0); 
+        float3 bias = N * 1e-4f; 
+        // compute refraction if it is not a case of total internal reflection
+        if (kr < 1) { 
+            float3 refractionDirection;
+            refract(I, N, eta, refractionDirection); 
+            refractionDirection = normalize(refractionDirection);
+            float3 refractionRayOrig = outside ? hitPoint - bias : hitPoint + bias; 
+            Ray refractedRay(refractionRayOrig, refractionDirection);
+ 			out_rays_refract[index] = refractedRay;
+        	out_coeffs_refract[index] = in_coeff * (1-kr);
+            //refractionColor = castRay(refractionRayOrig, refractionDirection, objects, lights, options, depth + 1); 
+        } 
+        float3 reflectionDirection = normalize(reflect(I, N)); 
+        float3 reflectionRayOrig = outside ? hitPoint + bias : hitPoint - bias; 
+        //float3 reflectionColor = castRay(reflectionRayOrig, reflectionDirection, objects, lights, options, depth + 1); 
+ 		
+        out_rays_refract[index] = Ray(reflectionRayOrig, reflectionDirection);
+        out_coeffs_refract[index] = in_coeff * kr;
+        
+        // mix the two
+        //finalColor += reflectionColor * kr + refractionColor * (1 - kr);
     }
 
   }
