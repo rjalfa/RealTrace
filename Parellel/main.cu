@@ -37,7 +37,7 @@
 #define OPENGL(X) 
 #endif
 
-#define SCALING_FACTOR 0.5
+#define SCALING_FACTOR 15
 
 using namespace std;
  // texture and pixel objects
@@ -161,11 +161,18 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
         }
       }
       Triangle t;
-      t.vertexA = vertices[idx[0][0]-1];
-      t.vertexB = vertices[idx[1][0]-1];
-      t.vertexC = vertices[idx[2][0]-1];
+      t.vertexA = vertices[idx[0][0]-1] + make_float3(-5,0,0);
+      t.vertexB = vertices[idx[1][0]-1] + make_float3(-5,0,0);
+      t.vertexC = vertices[idx[2][0]-1] + make_float3(-5,0,0);
       t.color = DEFAULT_COLOR;
-      if(h_triangles.size() < static_cast<unsigned int>(num_max)) h_triangles.push_back(t);
+      Triangle t1;
+      t1.vertexA = vertices[idx[0][0]-1] + make_float3(5,0,0);
+      t1.vertexB = vertices[idx[1][0]-1] + make_float3(5,0,0);
+      t1.vertexC = vertices[idx[2][0]-1] + make_float3(5,0,0);
+      t1.color = DEFAULT_COLOR;
+
+	if(h_triangles.size() < static_cast<unsigned int>(num_max)) h_triangles.push_back(t);
+	if(h_triangles.size() < static_cast<unsigned int>(num_max)) h_triangles.push_back(t1);
       // cerr << "rendered\n";
     } else if(c == "v") {
       is >> v[0] >> v[1] >> v[2];

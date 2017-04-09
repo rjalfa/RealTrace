@@ -135,7 +135,7 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
   
   bool can_refract = (out_rays_refract != NULL && out_coeffs_refract != NULL);
   bool can_reflect = (out_rays_reflect != NULL && out_coeffs_reflect != NULL);
-  bool will_refract = true;
+  bool will_refract = false;
   bool will_reflect = false;
   //Get owned ray
   Ray ray = rays[index];
