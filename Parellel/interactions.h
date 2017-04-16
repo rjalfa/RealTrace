@@ -5,7 +5,7 @@
  #define DELTA_P 0.1f
  #define TITLE_STRING "Stability"
 
-#include <GL/freeglut.h>
+//#include <GL/freeglut.h>
 #include "interactive_camera.h"
 #include "camera.h"
 

@@ -4,6 +4,7 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/tuple.h>
 #include <thrust/scan.h>
+#include <thrust/sort.h>
 #include "camera.h"
 #include "helper_cuda.h"
 #include "cuda_profiler_api.h"
@@ -19,7 +20,7 @@
 
 __device__ unsigned char clip(float x) { return x > 255 ? 255 : (x < 0 ? 0 : x); }
 
-UniformGrid * d_uniform_grid;
+BVHNode * d_root;
 float3* colors = 0;
 
 Ray* d_rays[7];
@@ -70,22 +71,9 @@ __device__ void fresnel(const float3& I, const float3& N, const float& ior, floa
 	}
 }
 
-//Uniform Grid Intersect
-//__device__ void getFirstIntersection(UniformGrid * ug, Ray& r) {
-//  ug->intersect(r);
-//}
-
-//Global Memory loop intersect
-/*
-__device__ void intersect(Triangle* triangles, int num_triangles, Ray* r)
-{
-  for(int i = 0; i < num_triangles; i ++) triangles[i].intersect(r);
-}
-*/
-
 //Shared Memory Loop Intersect
 
-__device__ void intersect(Triangle* triangles, int num_triangles, Ray* r, UniformGrid * ug)
+__device__ void intersect(Triangle* triangles, int num_triangles, Ray* r, BVHNode * root)
 {
 //  __shared__ Triangle localObjects[32];
 //  int triangles_to_scan = num_triangles;
@@ -100,7 +88,7 @@ __device__ void intersect(Triangle* triangles, int num_triangles, Ray* r, Unifor
 //    triangles_to_scan -= 32;
 //    __syncthreads();
 //  }
-	ug->intersect(triangles, *r);
+	root->intersect(triangles, *r);
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -147,7 +135,7 @@ __global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_r
 // l = LightSource object
 // ug = UniformGrid object
 ////////////////////////////////////////////////////////////////////////////
-__global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray* rays, Ray* out_rays_reflect, float* out_coeffs_reflect, Ray* out_rays_refract, float* out_coeffs_refract, Triangle* triangles, int num_triangles, LightSource* l, UniformGrid * ug)
+__global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray* rays, Ray* out_rays_reflect, float* out_coeffs_reflect, Ray* out_rays_refract, float* out_coeffs_refract, Triangle* triangles, int num_triangles, LightSource* l, BVHNode * root)
 {
 	if (out_color == NULL || rays == NULL) return;
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -164,7 +152,7 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
 	bool will_reflect = false;
 	//Get owned ray
 	Ray ray = rays[index];
-	intersect(triangles, num_triangles, &ray, ug);
+	intersect(triangles, num_triangles, &ray, root);
 	//bool reflect_over_refract = false;
 	//Do one time intersection
 	float3 finalColor = make_float3(0, 0, 0);
@@ -374,151 +362,155 @@ __global__ void get_bounds(float * xmin, float * xmax, float * ymin, float * yma
 	}
 }
 
-__global__ void count_sizes(UniformGrid * ug, Triangle * triangles, int num_triangles) {
-	int idx = blockDim.x * blockIdx.x + threadIdx.x;
-	if (idx < num_triangles) {
-		float xmin, xmax, ymin, ymax, zmin, zmax;
-		triangles[idx].getWorldBound(xmin, xmax, ymin, ymax, zmin, zmax);
-
-		int vxmin, vxmax, vymin, vymax, vzmin, vzmax;
-
-		vxmin = ug->posToVoxel(xmin, 0);
-		vxmax = ug->posToVoxel(xmax, 0);
-		vymin = ug->posToVoxel(ymin, 1);
-		vymax = ug->posToVoxel(ymax, 1);
-		vzmin = ug->posToVoxel(zmin, 2);
-		vzmax = ug->posToVoxel(zmax, 2);
-
-		for (int z = vzmin; z <= vzmax; z++) {
-			for (int y = vymin; y <= vymax; y++) {
-				for (int x = vxmin; x <= vxmax; x++) {
-					int o = ug->offset(x, y, z);
-					atomicAdd(&(ug->lower_limit[o]), 1);
-				}
-			}
-		}
-	}
+// Expands a 10-bit integer into 30 bits
+// by inserting 2 zeros after each bit.
+unsigned int expandBits(unsigned int v) {
+    v = (v * 0x00010001u) & 0xFF0000FFu;
+    v = (v * 0x00000101u) & 0x0F00F00Fu;
+    v = (v * 0x00000011u) & 0xC30C30C3u;
+    v = (v * 0x00000005u) & 0x49249249u;
+    return v;
 }
 
-//__global__ void reserve_space(UniformGrid * ug, int nv) {
-//  int idx = blockDim.x * blockIdx.x + threadIdx.x;
-//  if(idx < nv) {
-//    if(idx > 0) ug->voxels[idx].offset = ug->voxel_sizes[idx - 1];
-//    else ug->voxels[idx].offset = 0;
-//    if(idx > 0) ug->voxels[idx].max_size = ug->voxel_sizes[idx] - ug->voxel_sizes[idx - 1];
-//    else ug->voxels[idx].max_size = ug->voxel_sizes[idx];
-//    ug->voxels[idx].curr_size = 0;
-////    printf("%d\n", ug->voxels[idx].max_size);
-//  }
-//}
-
-__global__ void build_grid(UniformGrid * ug, Triangle * triangles, int num_triangles) {
-	int idx = blockDim.x * blockIdx.x + threadIdx.x;
-	if (idx < num_triangles) {
-		float xmin, xmax, ymin, ymax, zmin, zmax;
-		triangles[idx].getWorldBound(xmin, xmax, ymin, ymax, zmin, zmax);
-
-		int vxmin, vxmax, vymin, vymax, vzmin, vzmax;
-
-		vxmin = ug->posToVoxel(xmin, 0);
-		vxmax = ug->posToVoxel(xmax, 0);
-		vymin = ug->posToVoxel(ymin, 1);
-		vymax = ug->posToVoxel(ymax, 1);
-		vzmin = ug->posToVoxel(zmin, 2);
-		vzmax = ug->posToVoxel(zmax, 2);
-
-		for (int z = vzmin; z <= vzmax; z++) {
-			for (int y = vymin; y <= vymax; y++) {
-				for (int x = vxmin; x <= vxmax; x++) {
-					int o = ug->offset(x, y, z);
-					Voxel::addPrimitive(ug, idx, o);
-				}
-			}
-		}
-	}
+// Calculates a 30-bit Morton code for the
+// given 3D point located within the unit cube [0,1].
+unsigned int morton3D(float x, float y, float z, BBox * bounds) {
+	x = (x - bounds->axis_min[0]) / (bounds->axis_max[0] - bounds->axis_min[0]);
+	y = (y - bounds->axis_min[1]) / (bounds->axis_max[1] - bounds->axis_min[1]);
+	z = (z - bounds->axis_min[2]) / (bounds->axis_max[2] - bounds->axis_min[2]);
+    x = min(max(x * 1024.0f, 0.0f), 1023.0f);
+    y = min(max(y * 1024.0f, 0.0f), 1023.0f);
+    z = min(max(z * 1024.0f, 0.0f), 1023.0f);
+    unsigned int xx = expandBits((unsigned int)x);
+    unsigned int yy = expandBits((unsigned int)y);
+    unsigned int zz = expandBits((unsigned int)z);
+    return xx * 4 + yy * 2 + zz;
 }
 
-class justMax {
-public:
-	__host__ __device__
-	thrust::tuple<float, float, float> operator()(thrust::tuple<float, float, float> a, thrust::tuple<float, float, float> b) {
-		return thrust::make_tuple(max(thrust::get < 0 > (a), thrust::get < 0 > (b)), max(thrust::get < 1 > (a), thrust::get < 1 > (b)), max(thrust::get < 2 > (a), thrust::get < 2 > (b)));
-	}
-};
+__global__ void generate_morton_codes(unsigned int * morton_codes, float * xmin, float * xmax, float * ymin,
+                                float * ymax, float * zmin, float * zmax, BBox * bounds, int num_triangles) {
+    int idx = blockDim.x * blockIdx.x + threadIdx.x;
+    if(idx < num_triangles) {
+        morton_codes[idx] = morton3D(xmin[idx] + xmax[idx] / 2,
+                                ymin[idx] + ymax[idx] / 2,
+                                zmin[idx] + zmax[idx] / 2, bounds);
+    }
+}
 
-class justMin {
-public:
-	__host__ __device__
-	thrust::tuple<float, float, float> operator()(thrust::tuple<float, float, float> a, thrust::tuple<float, float, float> b) {
-		return thrust::make_tuple(min(thrust::get < 0 > (a), thrust::get < 0 > (b)), min(thrust::get < 1 > (a), thrust::get < 1 > (b)), min(thrust::get < 2 > (a), thrust::get < 2 > (b)));
-	}
-};
+int findSplit(unsigned int * sorted_codes, int first, int last) {
+    // Identical Morton codes => split the range in the middle.
 
-void buildGrid(int w, int h, Triangle * triangles, int num_triangles) {
+    unsigned int firstCode = sorted_codes[first];
+    unsigned int lastCode = sorted_codes[last];
 
-	//checkCudaErrors(cudaMalloc((void**)&colors, sizeof(float3)*w*h));
-	//checkCudaErrors(cudaMalloc((void**)&d_rays[0], sizeof(Ray)*w*h));
+    if (firstCode == lastCode)
+        return (first + last) >> 1;
 
-	float * xmin, * xmax, * ymin, * ymax, * zmin, * zmax;
-	cudaMalloc(&xmin, sizeof(float) * num_triangles);
-	cudaMalloc(&xmax, sizeof(float) * num_triangles);
-	cudaMalloc(&ymin, sizeof(float) * num_triangles);
-	cudaMalloc(&ymax, sizeof(float) * num_triangles);
-	cudaMalloc(&zmin, sizeof(float) * num_triangles);
-	cudaMalloc(&zmax, sizeof(float) * num_triangles);
+    // Calculate the number of highest bits that are the same
+    // for all objects, using the count-leading-zeros intrinsic.
 
-	const dim3 blockSize(TX * TY);
-	const dim3 gridSizeTriangles(damnCeil(num_triangles, TX * TY));
+    int commonPrefix = __clz(firstCode ^ lastCode);
 
-	get_bounds <<< gridSizeTriangles, blockSize >>> (xmin, xmax, ymin, ymax, zmin, zmax, triangles, num_triangles);
+    // Use binary search to find where the next bit differs.
+    // Specifically, we are looking for the highest object that
+    // shares more than commonPrefix bits with the first one.
 
-	thrust::tuple <float, float, float> axis_min, axis_max;
+    int split = first; // initial guess
+    int step = last - first;
 
-	thrust::device_ptr < float > xminptr = thrust::device_pointer_cast(xmin);
-	thrust::device_ptr < float > xmaxptr = thrust::device_pointer_cast(xmax);
-	thrust::device_ptr < float > yminptr = thrust::device_pointer_cast(ymin);
-	thrust::device_ptr < float > ymaxptr = thrust::device_pointer_cast(ymax);
-	thrust::device_ptr < float > zminptr = thrust::device_pointer_cast(zmin);
-	thrust::device_ptr < float > zmaxptr = thrust::device_pointer_cast(zmax);
+    do {
+        step = (step + 1) >> 1; // exponential decrease
+        int newSplit = split + step; // proposed new position
 
-	UniformGrid h_uniform_grid;
+        if (newSplit < last) {
+            unsigned int splitCode = sorted_codes[newSplit];
+            int splitPrefix = __clz(firstCode ^ splitCode);
+            if (splitPrefix > commonPrefix)
+                split = newSplit; // accept proposal
+        }
+    } while (step > 1);
 
-	h_uniform_grid.bounds.axis_min[0] = thrust::reduce(xminptr, xminptr + num_triangles, 1e36, thrust::minimum<float>());
-	h_uniform_grid.bounds.axis_min[1] = thrust::reduce(yminptr, yminptr + num_triangles, 1e36, thrust::minimum<float>());
-	h_uniform_grid.bounds.axis_min[2] = thrust::reduce(zminptr, zminptr + num_triangles, 1e36, thrust::minimum<float>());
-	h_uniform_grid.bounds.axis_max[0] = thrust::reduce(xmaxptr, xmaxptr + num_triangles, -1e36, thrust::maximum<float>());
-	h_uniform_grid.bounds.axis_max[1] = thrust::reduce(ymaxptr, ymaxptr + num_triangles, -1e36, thrust::maximum<float>());
-	h_uniform_grid.bounds.axis_max[2] = thrust::reduce(zmaxptr, zmaxptr + num_triangles, -1e36, thrust::maximum<float>());
+    return split;
+}
 
-	h_uniform_grid.initialize(num_triangles);
+BVHNode * generateHierarchy(unsigned int * sorted_codes, int first, int last, Triangle * triangles) {
+    if(first == last) {
+        BVHNode * temp = new BVHNode(NULL, NULL, first, last);
+        temp->bbox = triangles[first].getWorldBound();
+        return temp;
+    }
 
-	checkCudaErrors(cudaMalloc(&d_uniform_grid, sizeof(UniformGrid)));
-	checkCudaErrors(cudaMemcpy(d_uniform_grid, &h_uniform_grid, sizeof(UniformGrid), cudaMemcpyHostToDevice));
+    int split = findSplit(sorted_codes, first, last);
 
-	const dim3 gridSizeVoxels(damnCeil(h_uniform_grid.nv, TX * TY));
-	count_sizes <<< gridSizeTriangles, blockSize >>> (d_uniform_grid, triangles, num_triangles);
+    BVHNode * temp = new BVHNode();
+    temp->left = generateHierarchy(sorted_codes, first, split, triangles);
+    temp->right = generateHierarchy(sorted_codes, split + 1, last, triangles);
+    temp->calcBBox();
+    return temp;
+}
 
-	checkCudaErrors(cudaMemcpy(&h_uniform_grid, d_uniform_grid, sizeof(UniformGrid), cudaMemcpyDeviceToHost));
+void buildTree(int w, int h, Triangle * triangles, int num_triangles) {
 
-	thrust::device_ptr < int > voxel_sizes = thrust::device_pointer_cast(h_uniform_grid.lower_limit);
-	int total_space = thrust::reduce(voxel_sizes, voxel_sizes + h_uniform_grid.nv);
-	checkCudaErrors(cudaMalloc(&(h_uniform_grid.index_pool), sizeof(int) * total_space));
-	thrust::exclusive_scan(voxel_sizes, voxel_sizes + h_uniform_grid.nv, voxel_sizes);
+    //checkCudaErrors(cudaMalloc((void**)&colors, sizeof(float3)*w*h));
+    //checkCudaErrors(cudaMalloc((void**)&d_rays[0], sizeof(Ray)*w*h));
 
-	checkCudaErrors(cudaMemcpy(h_uniform_grid.upper_limit, h_uniform_grid.lower_limit,
-							   sizeof(int) * h_uniform_grid.nv, cudaMemcpyDeviceToDevice));
-	checkCudaErrors(cudaMemcpy(d_uniform_grid, &h_uniform_grid, sizeof(UniformGrid), cudaMemcpyHostToDevice));
+    float * xmin, * xmax, * ymin, * ymax, * zmin, * zmax;
+    cudaMalloc(&xmin, sizeof(float) * num_triangles);
+    cudaMalloc(&xmax, sizeof(float) * num_triangles);
+    cudaMalloc(&ymin, sizeof(float) * num_triangles);
+    cudaMalloc(&ymax, sizeof(float) * num_triangles);
+    cudaMalloc(&zmin, sizeof(float) * num_triangles);
+    cudaMalloc(&zmax, sizeof(float) * num_triangles);
 
-//  reserve_space <<< gridSizeVoxels, blockSize >>> (d_uniform_grid, h_uniform_grid.nv);
+    const dim3 blockSize(TX * TY);
+    const dim3 gridSizeTriangles(damnCeil(num_triangles, TX * TY));
 
-	build_grid <<< gridSizeTriangles, blockSize >>> (d_uniform_grid, triangles, num_triangles);
+    get_bounds <<< gridSizeTriangles, blockSize >>> (xmin, xmax, ymin, ymax, zmin, zmax, triangles, num_triangles);
 
-	checkCudaErrors(cudaFree(xmin));
-	checkCudaErrors(cudaFree(xmax));
-	checkCudaErrors(cudaFree(ymin));
-	checkCudaErrors(cudaFree(ymax));
-	checkCudaErrors(cudaFree(zmin));
-	checkCudaErrors(cudaFree(zmax));
+    thrust::tuple <float, float, float> axis_min, axis_max;
+
+    thrust::device_ptr < float > xminptr = thrust::device_pointer_cast(xmin);
+    thrust::device_ptr < float > xmaxptr = thrust::device_pointer_cast(xmax);
+    thrust::device_ptr < float > yminptr = thrust::device_pointer_cast(ymin);
+    thrust::device_ptr < float > ymaxptr = thrust::device_pointer_cast(ymax);
+    thrust::device_ptr < float > zminptr = thrust::device_pointer_cast(zmin);
+    thrust::device_ptr < float > zmaxptr = thrust::device_pointer_cast(zmax);
+
+    BBox bounds, * d_bounds;
+    checkCudaErrors(cudaMalloc(&d_bounds, sizeof(BBox)));
+    checkCudaErrors(cudaMemcpy(d_bounds, &bounds, sizeof(BBox), cudaMemcpyHostToDevice));
+    bounds.axis_min[0] = thrust::reduce(xminptr, xminptr + num_triangles, 1e36, thrust::minimum<float>());
+    bounds.axis_min[1] = thrust::reduce(yminptr, yminptr + num_triangles, 1e36, thrust::minimum<float>());
+    bounds.axis_min[2] = thrust::reduce(zminptr, zminptr + num_triangles, 1e36, thrust::minimum<float>());
+    bounds.axis_max[0] = thrust::reduce(xmaxptr, xmaxptr + num_triangles, -1e36, thrust::maximum<float>());
+    bounds.axis_max[1] = thrust::reduce(ymaxptr, ymaxptr + num_triangles, -1e36, thrust::maximum<float>());
+    bounds.axis_max[2] = thrust::reduce(zmaxptr, zmaxptr + num_triangles, -1e36, thrust::maximum<float>());
+
+    unsigned int * d_morton_codes;
+    checkCudaErrors(cudaMalloc(&d_morton_codes, sizeof(unsigned int) * num_triangles));
+
+    generate_morton_codes <<< gridSizeTriangles, blockSize >>> (d_morton_codes, xmin, xmax, ymin, ymax, zmin,
+                                                                zmax, d_bounds, num_triangles);
+
+    // thrust sort and stuff begin
+    thrust::sort_by_key(d_morton_codes, d_morton_codes + num_triangles, triangles);
+    Triangle * h_triangles = (Triangle *) malloc(sizeof(Triangle) * num_triangles);
+    // thrust sort and stuff done
+
+    unsigned int * morton_codes = (unsigned int *) malloc(sizeof(unsigned int) * num_triangles);
+
+    checkCudaErrors(cudaMemcpy(morton_codes, d_morton_codes, sizeof(unsigned int) * num_triangles, cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaMemcpy(h_triangles, triangles, sizeof(Triangle) * num_triangles, cudaMemcpyDeviceToHost));
+
+    BVHNode * root = generateHierarchy(morton_codes, 0, num_triangles - 1, h_triangles);
+    checkCudaErrors(cudaMalloc(&d_root, sizeof(BVHNode)));
+    checkCudaErrors(cudaMemcpy(d_root, root, sizeof(BVHNode), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaFree(xmin));
+    checkCudaErrors(cudaFree(xmax));
+    checkCudaErrors(cudaFree(ymin));
+    checkCudaErrors(cudaFree(ymax));
+    checkCudaErrors(cudaFree(zmin));
+    checkCudaErrors(cudaFree(zmax));
 }
 
 void create_space_for_kernels(int w, int h)
@@ -573,27 +565,27 @@ void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* trian
 
 	//Karlo Ray trace 1000 baar yahaan
 	//A
-	raytrace <<< gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[0], w, h, d_rays[0], d_rays[1], d_coeffs[1], d_rays[2], d_coeffs[2], triangles, num_triangles, l, d_uniform_grid);
+	raytrace <<< gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[0], w, h, d_rays[0], d_rays[1], d_coeffs[1], d_rays[2], d_coeffs[2], triangles, num_triangles, l, d_root);
 	//cudaEventRecord(event);
 	cudaDeviceSynchronize();
 
 	//Run these 2 concurrently
 	//A1
-	raytrace <<< gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[1], w, h, d_rays[1], d_rays[3], d_coeffs[3], d_rays[4], d_coeffs[4], triangles, num_triangles, l, d_uniform_grid);
+	raytrace <<< gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[1], w, h, d_rays[1], d_rays[3], d_coeffs[3], d_rays[4], d_coeffs[4], triangles, num_triangles, l, d_root);
 	//A2
-	raytrace <<< gridSize, blockSize, 0, streamA2>>>(colors, d_coeffs[2], w, h, d_rays[2], d_rays[5], d_coeffs[5], d_rays[6], d_coeffs[6], triangles, num_triangles, l, d_uniform_grid);
+	raytrace <<< gridSize, blockSize, 0, streamA2>>>(colors, d_coeffs[2], w, h, d_rays[2], d_rays[5], d_coeffs[5], d_rays[6], d_coeffs[6], triangles, num_triangles, l, d_root);
 	//cudaEventRecord(event);
 	cudaDeviceSynchronize();
 
 	//Run these 4 concurrently
 	//A11
-	raytrace <<< gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[3], w, h, d_rays[3], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+	raytrace <<< gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[3], w, h, d_rays[3], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_root);
 	//A12
-	raytrace <<< gridSize, blockSize, 0, streamA2>>>(colors, d_coeffs[4], w, h, d_rays[4], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+	raytrace <<< gridSize, blockSize, 0, streamA2>>>(colors, d_coeffs[4], w, h, d_rays[4], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_root);
 	//A21
-	raytrace <<< gridSize, blockSize, 0, streamA3>>>(colors, d_coeffs[5], w, h, d_rays[5], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+	raytrace <<< gridSize, blockSize, 0, streamA3>>>(colors, d_coeffs[5], w, h, d_rays[5], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_root);
 	//A22
-	raytrace <<< gridSize, blockSize, 0, streamA4>>>(colors, d_coeffs[6], w, h, d_rays[6], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+	raytrace <<< gridSize, blockSize, 0, streamA4>>>(colors, d_coeffs[6], w, h, d_rays[6], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_root);
 	//cudaEventRecord(event);
 	cudaDeviceSynchronize();
 

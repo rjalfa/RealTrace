@@ -67,11 +67,15 @@ public:
 	float axis_min[3], axis_max[3];
 	__host__ __device__
 	BBox() {
-		// GPU isn't as precise, might require changing this
-//		axis_min[0] = axis_min[1] = axis_min[2] = std::numeric_limits < float >::max();
-//		axis_max[0] = axis_max[1] = axis_max[2] = std::numeric_limits < float >::min();
 		axis_min[0] = axis_min[1] = axis_min[2] = 1e36;
 		axis_max[0] = axis_max[1] = axis_max[2] = -1e36;
+	}
+	__host__ __device__
+	void doUnion(const BBox& temp) {
+		for(int i = 0; i < 3; i++) {
+			axis_max[i] = max(axis_max[i], temp.axis_max[i]);
+			axis_min[i] = min(axis_min[i], temp.axis_min[i]);
+		}
 	}
 };
 
@@ -94,40 +98,68 @@ public:
 	}
 };
 
-class UniformGrid;
-
-class Voxel {
-public:
-	__device__ static void addPrimitive(UniformGrid * ug, int i, int idx);
-	__host__ __device__ static bool intersect(UniformGrid * ug, Triangle * triangles, Ray& ray, int idx);
-};
-
-class UniformGrid {
-	float delta[3];
-	int nVoxels[3];
-	float voxelsPerUnitDist;
-	float width[3], invWidth[3];
-
-	__host__ __device__ float findVoxelsPerUnitDist(float delta[], int num);
-
-public:
-	int * index_pool;
-	int * lower_limit, * upper_limit;
-	int nv;
-	BBox bounds;
+__host__ __device__ bool BBoxIntersects(BBox& box, Ray& ray) {
 	float3 bounds_a[2];
-	UniformGrid() {
-		lower_limit = upper_limit = 0;
-		index_pool = 0;
-		nv = 0;
-		voxelsPerUnitDist = 0;
-	};
-	__host__ void initialize(int num_triangles);
-//	__host__ __device__ void buildGrid(Triangle * p);
-	__host__ __device__ bool intersect(Triangle * triangles, Ray& ray);
-	__host__ __device__ int posToVoxel(const float pos_comp, int axis);
-	__host__ __device__ float voxelToPos(int p, int axis);
-	__host__ __device__ int offset(float x, float y, float z);
+	bounds_a[0] = make_float3(box.axis_min[0], box.axis_min[1], box.axis_min[2]);
+	bounds_a[1] = make_float3(box.axis_max[0], box.axis_max[1], box.axis_max[2]);
+	float dirx = ray.direction.x, diry = ray.direction.y, dirz = ray.direction.z;
+	{
+		float tmin, tmax, tymin, tymax, tzmin, tzmax;
+		bool signx = (dirx < 0), signy = (diry < 0), signz = (dirz < 0);
+		tmin = (bounds_a[signx].x - ray.origin.x) / dirx;
+		tmax = (bounds_a[1 - signx].x - ray.origin.x) / dirx;
+		tymin = (bounds_a[signy].y - ray.origin.y) / diry;
+		tymax = (bounds_a[1 - signy].y - ray.origin.y) / diry;
+		if (tmin > tymax || tymin > tmax) return false;
+		if (tymin > tmin) tmin = tymin;
+		if (tymax < tmax) tmax = tymax;
+
+		tzmin = (bounds_a[signz].z - ray.origin.z) / dirz;
+		tzmax = (bounds_a[1 - signz].z - ray.origin.z) / dirz;
+
+		if ((tmin > tzmax) || (tzmin > tmax)) return false;
+	}
+	return true;
+}
+
+class BVHNode;
+
+class BVHNode {
+public:
+    BVHNode * left, * right;
+    int first, last;
+    BBox bbox;
+
+    __host__ __device__ BVHNode() {
+        left = right = NULL;
+        first = last = -1;
+    }
+
+    __host__ __device__ BVHNode(BVHNode * left, BVHNode * right, int first, int last) {
+        this->first = first;
+        this->last = last;
+        this->left = left;
+        this->right = right;
+    }
+
+    __host__ __device__ void calcBBox() {
+        if(left != NULL && right != NULL)
+            left->bbox.doUnion(right->bbox);
+    }
+
+    __host__ __device__ void intersect(Triangle * triangles, Ray& ray) {
+        // check if ray intersects with its bbox, otherwise exit
+        // for(int i = first; i <= last; i++)
+        //     triangles[i].intersect(ray);
+    	if(::BBoxIntersects(bbox, ray)) {
+    		if(first == last) {
+    			triangles[first].intersect(&ray);
+    		} else {
+    			left->intersect(triangles, ray);
+    			right->intersect(triangles, ray);
+    		}
+    	}
+    }
 };
 
 __host__ __device__ float3 get_light_color(float3 point, float3 normal, LightSource* l, Triangle* t, float3 viewVector);
