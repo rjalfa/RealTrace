@@ -364,7 +364,7 @@ __global__ void get_bounds(float * xmin, float * xmax, float * ymin, float * yma
 
 // Expands a 10-bit integer into 30 bits
 // by inserting 2 zeros after each bit.
-unsigned int expandBits(unsigned int v) {
+__device__ unsigned int expandBits(unsigned int v) {
     v = (v * 0x00010001u) & 0xFF0000FFu;
     v = (v * 0x00000101u) & 0x0F00F00Fu;
     v = (v * 0x00000011u) & 0xC30C30C3u;
@@ -374,7 +374,7 @@ unsigned int expandBits(unsigned int v) {
 
 // Calculates a 30-bit Morton code for the
 // given 3D point located within the unit cube [0,1].
-unsigned int morton3D(float x, float y, float z, BBox * bounds) {
+__device__ unsigned int morton3D(float x, float y, float z, BBox * bounds) {
 	x = (x - bounds->axis_min[0]) / (bounds->axis_max[0] - bounds->axis_min[0]);
 	y = (y - bounds->axis_min[1]) / (bounds->axis_max[1] - bounds->axis_min[1]);
 	z = (z - bounds->axis_min[2]) / (bounds->axis_max[2] - bounds->axis_min[2]);
@@ -409,8 +409,8 @@ int findSplit(unsigned int * sorted_codes, int first, int last) {
     // Calculate the number of highest bits that are the same
     // for all objects, using the count-leading-zeros intrinsic.
 
-    int commonPrefix = __clz(firstCode ^ lastCode);
-
+//    int commonPrefix = __clz(firstCode ^ lastCode);
+    int commonPrefix = __builtin_clz(firstCode ^ lastCode);
     // Use binary search to find where the next bit differs.
     // Specifically, we are looking for the highest object that
     // shares more than commonPrefix bits with the first one.
@@ -424,7 +424,8 @@ int findSplit(unsigned int * sorted_codes, int first, int last) {
 
         if (newSplit < last) {
             unsigned int splitCode = sorted_codes[newSplit];
-            int splitPrefix = __clz(firstCode ^ splitCode);
+//            int splitPrefix = __clz(firstCode ^ splitCode);
+            int splitPrefix = __builtin_clz(firstCode ^ splitCode);
             if (splitPrefix > commonPrefix)
                 split = newSplit; // accept proposal
         }
