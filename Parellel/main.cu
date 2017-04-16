@@ -175,7 +175,7 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
 			t1.vertexB = vertices[idx[1][0] - 1] + make_float3(5, 0, 0);
 			t1.vertexC = vertices[idx[2][0] - 1] + make_float3(5, 0, 0);
 			t1.color = DEFAULT_COLOR;
-			t1.type_of_material = DIFFUSE;
+			t1.type_of_material = REFRACTIVE;
 
 			if (h_triangles.size() < static_cast<unsigned int>(num_max)) h_triangles.push_back(t);
 			if (h_triangles.size() < static_cast<unsigned int>(num_max)) h_triangles.push_back(t1);
