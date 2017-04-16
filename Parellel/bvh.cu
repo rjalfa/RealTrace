@@ -127,6 +127,7 @@ void buildTree(int w, int h, Triangle * triangles, int num_triangles) {
     bounds.axis_max[1] = thrust::reduce(ymaxptr, ymaxptr + num_triangles, -1e36, thrust::maximum<float>());
     bounds.axis_max[2] = thrust::reduce(zmaxptr, zmaxptr + num_triangles, -1e36, thrust::maximum<float>());
 
+
     unsigned int * d_morton_codes;
     checkCudaErrors(cudaMalloc(&d_morton_codes, sizeof(unsigned int) * num_triangles));
 

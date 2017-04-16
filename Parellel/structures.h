@@ -77,6 +77,8 @@ public:
 			axis_min[i] = min(axis_min[i], temp.axis_min[i]);
 		}
 	}
+	__host__ __device__
+	bool intersects(Ray& ray);
 };
 
 class Triangle
@@ -98,68 +100,37 @@ public:
 	}
 };
 
-__host__ __device__ bool BBoxIntersects(BBox& box, Ray& ray) {
-	float3 bounds_a[2];
-	bounds_a[0] = make_float3(box.axis_min[0], box.axis_min[1], box.axis_min[2]);
-	bounds_a[1] = make_float3(box.axis_max[0], box.axis_max[1], box.axis_max[2]);
-	float dirx = ray.direction.x, diry = ray.direction.y, dirz = ray.direction.z;
-	{
-		float tmin, tmax, tymin, tymax, tzmin, tzmax;
-		bool signx = (dirx < 0), signy = (diry < 0), signz = (dirz < 0);
-		tmin = (bounds_a[signx].x - ray.origin.x) / dirx;
-		tmax = (bounds_a[1 - signx].x - ray.origin.x) / dirx;
-		tymin = (bounds_a[signy].y - ray.origin.y) / diry;
-		tymax = (bounds_a[1 - signy].y - ray.origin.y) / diry;
-		if (tmin > tymax || tymin > tmax) return false;
-		if (tymin > tmin) tmin = tymin;
-		if (tymax < tmax) tmax = tymax;
+class BVHTree;
 
-		tzmin = (bounds_a[signz].z - ray.origin.z) / dirz;
-		tzmax = (bounds_a[1 - signz].z - ray.origin.z) / dirz;
+class BVHTree {
+private:
+	 __host__ __device__ bool checkIntersect(Ray& ray, int idx);
 
-		if ((tmin > tzmax) || (tzmin > tmax)) return false;
-	}
-	return true;
-}
-
-class BVHNode;
-
-class BVHNode {
 public:
-    BVHNode * left, * right;
-    int first, last;
-    BBox bbox;
-
-    __host__ __device__ BVHNode() {
-        left = right = NULL;
-        first = last = -1;
+    int * left, * right;
+    bool * isLeaf;
+    BBox * bbox;
+    int * primitive_idx;
+    __host__ __device__
+    BVHTree() {
+    	left = right = NULL;
+    	bbox = NULL;
+    	isLeaf = NULL;
+    	primitive_idx = NULL;
+    }
+    __host__ __device__
+    BVHTree(int size) {
+    	left = (int *) malloc(size * sizeof(int));
+    	right = (int *) malloc(size * sizeof(int));
+    	primitive_idx = (int *) malloc(size * sizeof(int));
+    	bbox = (BBox *) malloc(size * sizeof(BBox));
+    	isLeaf = (bool *) malloc(size * sizeof(bool));
     }
 
-    __host__ __device__ BVHNode(BVHNode * left, BVHNode * right, int first, int last) {
-        this->first = first;
-        this->last = last;
-        this->left = left;
-        this->right = right;
-    }
-
-    __host__ __device__ void calcBBox() {
-        if(left != NULL && right != NULL)
-            left->bbox.doUnion(right->bbox);
-    }
-
-    __host__ __device__ void intersect(Triangle * triangles, Ray& ray) {
-        // check if ray intersects with its bbox, otherwise exit
-        // for(int i = first; i <= last; i++)
-        //     triangles[i].intersect(ray);
-    	if(::BBoxIntersects(bbox, ray)) {
-    		if(first == last) {
-    			triangles[first].intersect(&ray);
-    		} else {
-    			left->intersect(triangles, ray);
-    			right->intersect(triangles, ray);
-    		}
-    	}
-    }
+    __host__ __device__
+    void intersect(Triangle * triangles, Ray& ray);
+    __host__ __device__
+    void intersect(Triangle * triangles, Ray& ray, int idx);
 };
 
 __host__ __device__ float3 get_light_color(float3 point, float3 normal, LightSource* l, Triangle* t, float3 viewVector);

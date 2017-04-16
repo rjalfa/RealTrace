@@ -149,8 +149,6 @@ __host__ __device__ BBox Triangle::getWorldBound() {
 }
 
 __host__ __device__ void Triangle::getWorldBound(float& xmin, float& xmax, float& ymin, float& ymax, float& zmin, float& zmax) {
-//	xmin = ymin = zmin = std::numeric_limits < float >::max();
-//	xmax = ymax = zmax = std::numeric_limits < float >::min();
 	xmin = ymin = zmin = SICK_FLT_MAX;
 	xmax = ymax = zmax = SICK_FLT_MIN;
 	for (int vno = 0; vno < 3; vno++) {
@@ -161,6 +159,90 @@ __host__ __device__ void Triangle::getWorldBound(float& xmin, float& xmax, float
 		zmin = min(zmin, getVertex(vno).z);
 		zmax = max(zmax, getVertex(vno).z);
 	}
+}
+
+__host__ __device__ bool BBox::intersects(Ray& ray) {
+	float3 bounds_a[2];
+	bounds_a[0] = make_float3(this->axis_min[0], this->axis_min[1], this->axis_min[2]);
+	bounds_a[1] = make_float3(this->axis_max[0], this->axis_max[1], this->axis_max[2]);
+
+	bool flag = false;
+	float dirx = ray.direction.x, diry = ray.direction.y, dirz = ray.direction.z;
+	{
+		float tmin, tmax, tymin, tymax, tzmin, tzmax;
+		bool signx = (dirx < 0), signy = (diry < 0), signz = (dirz < 0);
+		tmin = (bounds_a[signx].x - ray.origin.x) / dirx;
+		tmax = (bounds_a[1 - signx].x - ray.origin.x) / dirx;
+		tymin = (bounds_a[signy].y - ray.origin.y) / diry;
+		tymax = (bounds_a[1 - signy].y - ray.origin.y) / diry;
+		if (tmin > tymax || tymin > tmax) flag = false;
+		if (tymin > tmin) tmin = tymin;
+		if (tymax < tmax) tmax = tymax;
+
+		tzmin = (bounds_a[signz].z - ray.origin.z) / dirz;
+		tzmax = (bounds_a[1 - signz].z - ray.origin.z) / dirz;
+
+		if ((tmin > tzmax) || (tzmin > tmax)) flag = false;
+
+		flag = true;
+	}
+
+	return flag;
+}
+
+__host__ __device__ bool BVHTree::checkIntersect(Ray& ray, int idx) {
+	if(idx == -1) return false;
+	return bbox[idx].intersects(ray);
+}
+
+__host__ __device__ void BVHTree::intersect(Triangle * triangles, Ray& ray, int idx) {
+	if(idx == -1) return;
+	if(isLeaf[idx]) {
+		triangles[primitive_idx[idx]].intersect(&ray);
+		return;
+	}
+	intersect(triangles, ray, left[idx]);
+	intersect(triangles, ray, right[idx]);
+	return;
+}
+
+__host__ __device__ void BVHTree::intersect(Triangle * triangles, Ray& ray) {
+	// Allocate traversal stack from thread-local memory,
+	// and push NULL to indicate that there are no postponed nodes.
+	int stack[64];
+	int * stackPtr = stack;
+	*stackPtr++ = -1; // push
+
+	// Traverse nodes starting from the root.
+	int node = 0;
+	do {
+		// Check each child node for overlap.
+		int  childL = left[node];
+		int  childR = right[node];
+		bool overlapL = checkIntersect(ray, childL);
+		bool overlapR = checkIntersect(ray, childR);
+
+		// Query overlaps a leaf node => report collision.
+		bool isLeafL = (childL != -1) && isLeaf[childL];
+		bool isLeafR = (childR != -1) && isLeaf[childR];
+		if (overlapL && isLeafL)
+			triangles[primitive_idx[childL]].intersect(&ray);
+
+		if (overlapR && isLeafR)
+			triangles[primitive_idx[childR]].intersect(&ray);
+
+		// Query overlaps an internal node => traverse.
+		bool traverseL = (overlapL && !isLeafL);
+		bool traverseR = (overlapR && !isLeafR);
+
+		if (!traverseL && !traverseR) {
+			node = *--stackPtr; // pop
+		} else {
+			node = (traverseL) ? childL : childR;
+			if (traverseL && traverseR)
+				*stackPtr++ = childR; // push
+		}
+	} while (node != -1);
 }
 
 __host__ __device__ float3 get_light_color(float3 point, float3 normal, LightSource* l, Triangle* t, float3 viewVector)

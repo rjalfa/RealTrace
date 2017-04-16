@@ -9,6 +9,8 @@
 #include "helper_cuda.h"
 #include "cuda_profiler_api.h"
 #include "utilities.h"
+#include <queue>
+
 #define TX 32
 #define TY 32
 #define AMBIENT_COLOR make_float3(0.235294, 0.67451, 0.843137)
@@ -20,7 +22,7 @@
 
 __device__ unsigned char clip(float x) { return x > 255 ? 255 : (x < 0 ? 0 : x); }
 
-BVHNode * d_root;
+BVHTree * d_tree;
 float3* colors = 0;
 
 Ray* d_rays[7];
@@ -73,7 +75,7 @@ __device__ void fresnel(const float3& I, const float3& N, const float& ior, floa
 
 //Shared Memory Loop Intersect
 
-__device__ void intersect(Triangle* triangles, int num_triangles, Ray* r, BVHNode * root)
+__device__ void intersect(Triangle* triangles, int num_triangles, Ray* r, BVHTree * root)
 {
 //  __shared__ Triangle localObjects[32];
 //  int triangles_to_scan = num_triangles;
@@ -88,7 +90,7 @@ __device__ void intersect(Triangle* triangles, int num_triangles, Ray* r, BVHNod
 //    triangles_to_scan -= 32;
 //    __syncthreads();
 //  }
-	root->intersect(triangles, *r);
+	root->intersect(triangles, *r, 0);
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -135,7 +137,7 @@ __global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_r
 // l = LightSource object
 // ug = UniformGrid object
 ////////////////////////////////////////////////////////////////////////////
-__global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray* rays, Ray* out_rays_reflect, float* out_coeffs_reflect, Ray* out_rays_refract, float* out_coeffs_refract, Triangle* triangles, int num_triangles, LightSource* l, BVHNode * root)
+__global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray* rays, Ray* out_rays_reflect, float* out_coeffs_reflect, Ray* out_rays_refract, float* out_coeffs_refract, Triangle* triangles, int num_triangles, LightSource* l, BVHTree * root)
 {
 	if (out_color == NULL || rays == NULL) return;
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -434,20 +436,62 @@ int findSplit(unsigned int * sorted_codes, int first, int last) {
     return split;
 }
 
-BVHNode * generateHierarchy(unsigned int * sorted_codes, int first, int last, Triangle * triangles) {
-    if(first == last) {
-        BVHNode * temp = new BVHNode(NULL, NULL, first, last);
-        temp->bbox = triangles[first].getWorldBound();
-        return temp;
-    }
+void generateHierarchy(unsigned int * sorted_codes, int first, int last, Triangle * triangles, BVHTree& tree, int& idx) {
+//	int curr_idx = idx;
+//	if(first == last) {
+//		tree.isLeaf[curr_idx] = true;
+//		tree.primitive_idx[curr_idx] = first;
+//		tree.left[curr_idx] = - 1;
+//		tree.right[curr_idx] = -1;
+//		tree.bbox[curr_idx] = triangles[first].getWorldBound();
+//		return;
+//    }
+//
+//	int split = findSplit(sorted_codes, first, last);
+//    int left_idx = ++idx;
+//    generateHierarchy(sorted_codes, first, split, triangles, tree, idx);
+//    int right_idx = ++idx;
+//    generateHierarchy(sorted_codes, split + 1, last, triangles, tree, idx);
+//    tree.left[curr_idx] = left_idx, tree.right[curr_idx] = right_idx;
+//    tree.isLeaf[curr_idx] = false;
+//    tree.primitive_idx[curr_idx] = -1;
+//    tree.bbox[curr_idx] = tree.bbox[left_idx];
+//    tree.bbox[curr_idx].doUnion(tree.bbox[right_idx]);
+//    return;
 
-    int split = findSplit(sorted_codes, first, last);
+	queue < int > first_queue, last_queue, node_queue;
+	node_queue.push(idx); idx++;
+	first_queue.push(first);
+	last_queue.push(last);
+	while(!node_queue.empty()) {
+		int node = node_queue.front(); node_queue.pop();
+		int node_first = first_queue.front(); first_queue.pop();
+		int node_last = last_queue.front(); last_queue.pop();
+		if(node_first != node_last) {
+			tree.isLeaf[node] = false;
+			tree.primitive_idx[node] = -1;
+			int split = findSplit(sorted_codes, node_first, node_last);
+			tree.left[node] = idx;
+			tree.right[node] = idx + 1;
+			node_queue.push(idx); node_queue.push(idx + 1);
+			idx += 2;
+			first_queue.push(node_first); first_queue.push(split + 1);
+			last_queue.push(split); last_queue.push(node_last);
+		} else {
+			tree.isLeaf[node] = true;
+			tree.primitive_idx[node] = node_first;
+			tree.left[node] = - 1;
+			tree.right[node] = -1;
+			tree.bbox[node] = triangles[node_first].getWorldBound();
+		}
+	}
 
-    BVHNode * temp = new BVHNode();
-    temp->left = generateHierarchy(sorted_codes, first, split, triangles);
-    temp->right = generateHierarchy(sorted_codes, split + 1, last, triangles);
-    temp->calcBBox();
-    return temp;
+	for(int i = idx - 1; i >= 0; i--) {
+		if(!tree.isLeaf[i]) {
+			tree.bbox[i] = tree.bbox[tree.left[i]];
+			tree.bbox[i].doUnion(tree.bbox[tree.right[i]]);
+		}
+	}
 }
 
 void buildTree(int w, int h, Triangle * triangles, int num_triangles) {
@@ -479,33 +523,66 @@ void buildTree(int w, int h, Triangle * triangles, int num_triangles) {
 
     BBox bounds, * d_bounds;
     checkCudaErrors(cudaMalloc(&d_bounds, sizeof(BBox)));
-    checkCudaErrors(cudaMemcpy(d_bounds, &bounds, sizeof(BBox), cudaMemcpyHostToDevice));
     bounds.axis_min[0] = thrust::reduce(xminptr, xminptr + num_triangles, 1e36, thrust::minimum<float>());
     bounds.axis_min[1] = thrust::reduce(yminptr, yminptr + num_triangles, 1e36, thrust::minimum<float>());
     bounds.axis_min[2] = thrust::reduce(zminptr, zminptr + num_triangles, 1e36, thrust::minimum<float>());
     bounds.axis_max[0] = thrust::reduce(xmaxptr, xmaxptr + num_triangles, -1e36, thrust::maximum<float>());
     bounds.axis_max[1] = thrust::reduce(ymaxptr, ymaxptr + num_triangles, -1e36, thrust::maximum<float>());
     bounds.axis_max[2] = thrust::reduce(zmaxptr, zmaxptr + num_triangles, -1e36, thrust::maximum<float>());
-
+    cout << bounds.axis_min[0] << " " << bounds.axis_max[0] << endl;
+	cout << bounds.axis_min[1] << " " << bounds.axis_max[1] << endl;
+	cout << bounds.axis_min[2] << " " << bounds.axis_max[2] << endl;
+    checkCudaErrors(cudaMemcpy(d_bounds, &bounds, sizeof(BBox), cudaMemcpyHostToDevice));
+//    cudaDeviceSynchronize();
+//    printf("%f %f\n", bounds.axis_min[0], bounds.axis_max[0]);
+//    printf("%f %f\n", bounds.axis_min[1], bounds.axis_max[1]);
+//    printf("%f %f\n", bounds.axis_min[2], bounds.axis_max[2]);
+//    checkCudaErrors(cudaMemcpy(&bounds, d_bounds, sizeof(BBox), cudaMemcpyDeviceToHost));
+//    printf("%f %f\n", bounds.axis_min[0], bounds.axis_max[0]);
+//	printf("%f %f\n", bounds.axis_min[1], bounds.axis_max[1]);
+//	printf("%f %f\n", bounds.axis_min[2], bounds.axis_max[2]);
     unsigned int * d_morton_codes;
     checkCudaErrors(cudaMalloc(&d_morton_codes, sizeof(unsigned int) * num_triangles));
-
+    cudaDeviceSynchronize();
+    cout << "allocation done" << endl;
     generate_morton_codes <<< gridSizeTriangles, blockSize >>> (d_morton_codes, xmin, xmax, ymin, ymax, zmin,
                                                                 zmax, d_bounds, num_triangles);
-
-    // thrust sort and stuff begin
-    thrust::sort_by_key(d_morton_codes, d_morton_codes + num_triangles, triangles);
-    Triangle * h_triangles = (Triangle *) malloc(sizeof(Triangle) * num_triangles);
-    // thrust sort and stuff done
-
     unsigned int * morton_codes = (unsigned int *) malloc(sizeof(unsigned int) * num_triangles);
+    Triangle * h_triangles = (Triangle *) malloc(sizeof(Triangle) * num_triangles);
 
     checkCudaErrors(cudaMemcpy(morton_codes, d_morton_codes, sizeof(unsigned int) * num_triangles, cudaMemcpyDeviceToHost));
     checkCudaErrors(cudaMemcpy(h_triangles, triangles, sizeof(Triangle) * num_triangles, cudaMemcpyDeviceToHost));
 
-    BVHNode * root = generateHierarchy(morton_codes, 0, num_triangles - 1, h_triangles);
-    checkCudaErrors(cudaMalloc(&d_root, sizeof(BVHNode)));
-    checkCudaErrors(cudaMemcpy(d_root, root, sizeof(BVHNode), cudaMemcpyHostToDevice));
+    cudaDeviceSynchronize();
+    cout << "morton codes done" << endl;
+
+    // thrust sort and stuff begin
+    thrust::sort_by_key(morton_codes, morton_codes + num_triangles, h_triangles);
+    // thrust sort and stuff done
+    cudaDeviceSynchronize();
+    cout << "sort stuff done" << endl;
+
+    int idx = 0;
+    BVHTree h_tree(3 * num_triangles), h_dtree_holder;
+
+    generateHierarchy(morton_codes, 0, num_triangles - 1, h_triangles, h_tree, idx);
+    cout << num_triangles << " "  << idx << " " << (float) idx / num_triangles << endl;
+    checkCudaErrors(cudaMalloc(&h_dtree_holder.bbox, sizeof(BBox) * num_triangles * 3));
+    checkCudaErrors(cudaMalloc(&h_dtree_holder.left, sizeof(int)  * num_triangles * 3));
+    checkCudaErrors(cudaMalloc(&h_dtree_holder.right, sizeof(int) * num_triangles * 3));
+    checkCudaErrors(cudaMalloc(&h_dtree_holder.primitive_idx, sizeof(int) * num_triangles * 3));
+    checkCudaErrors(cudaMalloc(&h_dtree_holder.isLeaf, sizeof(bool) * num_triangles * 3));
+
+    checkCudaErrors(cudaMemcpy(h_dtree_holder.bbox, h_tree.bbox, sizeof(BBox) * num_triangles * 3, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(h_dtree_holder.left, h_tree.left, sizeof(int) * num_triangles * 3, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(h_dtree_holder.right, h_tree.right, sizeof(int) * num_triangles * 3, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(h_dtree_holder.primitive_idx, h_tree.primitive_idx, sizeof(int) * num_triangles * 3, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(h_dtree_holder.isLeaf, h_tree.isLeaf, sizeof(bool) * num_triangles * 3, cudaMemcpyHostToDevice));
+
+    checkCudaErrors(cudaMalloc(&d_tree, sizeof(BVHTree)));
+    checkCudaErrors(cudaMemcpy(d_tree, &h_dtree_holder, sizeof(BVHTree), cudaMemcpyHostToDevice));
+    cudaDeviceSynchronize();
+    cout << "all memory copy done" << endl;
     checkCudaErrors(cudaFree(xmin));
     checkCudaErrors(cudaFree(xmax));
     checkCudaErrors(cudaFree(ymin));
@@ -566,27 +643,27 @@ void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* trian
 
 	//Karlo Ray trace 1000 baar yahaan
 	//A
-	raytrace <<< gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[0], w, h, d_rays[0], d_rays[1], d_coeffs[1], d_rays[2], d_coeffs[2], triangles, num_triangles, l, d_root);
+	raytrace <<< gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[0], w, h, d_rays[0], d_rays[1], d_coeffs[1], d_rays[2], d_coeffs[2], triangles, num_triangles, l, d_tree);
 	//cudaEventRecord(event);
 	cudaDeviceSynchronize();
 
 	//Run these 2 concurrently
 	//A1
-	raytrace <<< gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[1], w, h, d_rays[1], d_rays[3], d_coeffs[3], d_rays[4], d_coeffs[4], triangles, num_triangles, l, d_root);
+	raytrace <<< gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[1], w, h, d_rays[1], d_rays[3], d_coeffs[3], d_rays[4], d_coeffs[4], triangles, num_triangles, l, d_tree);
 	//A2
-	raytrace <<< gridSize, blockSize, 0, streamA2>>>(colors, d_coeffs[2], w, h, d_rays[2], d_rays[5], d_coeffs[5], d_rays[6], d_coeffs[6], triangles, num_triangles, l, d_root);
+	raytrace <<< gridSize, blockSize, 0, streamA2>>>(colors, d_coeffs[2], w, h, d_rays[2], d_rays[5], d_coeffs[5], d_rays[6], d_coeffs[6], triangles, num_triangles, l, d_tree);
 	//cudaEventRecord(event);
 	cudaDeviceSynchronize();
 
 	//Run these 4 concurrently
 	//A11
-	raytrace <<< gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[3], w, h, d_rays[3], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_root);
+	raytrace <<< gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[3], w, h, d_rays[3], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_tree);
 	//A12
-	raytrace <<< gridSize, blockSize, 0, streamA2>>>(colors, d_coeffs[4], w, h, d_rays[4], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_root);
+	raytrace <<< gridSize, blockSize, 0, streamA2>>>(colors, d_coeffs[4], w, h, d_rays[4], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_tree);
 	//A21
-	raytrace <<< gridSize, blockSize, 0, streamA3>>>(colors, d_coeffs[5], w, h, d_rays[5], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_root);
+	raytrace <<< gridSize, blockSize, 0, streamA3>>>(colors, d_coeffs[5], w, h, d_rays[5], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_tree);
 	//A22
-	raytrace <<< gridSize, blockSize, 0, streamA4>>>(colors, d_coeffs[6], w, h, d_rays[6], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_root);
+	raytrace <<< gridSize, blockSize, 0, streamA4>>>(colors, d_coeffs[6], w, h, d_rays[6], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_tree);
 	//cudaEventRecord(event);
 	cudaDeviceSynchronize();
 

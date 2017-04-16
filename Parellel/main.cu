@@ -37,7 +37,7 @@
 #define OPENGL(X)
 #endif
 
-#define SCALING_FACTOR 2
+#define SCALING_FACTOR 0.1
 
 using namespace std;
 // texture and pixel objects
@@ -239,7 +239,7 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
 	cerr << "[INFO] Memory to be transferred to GPU: " << mem << " B" << endl;
 	num_triangles = h_triangles.size();
 	cerr << "[INFO] readData Complete" << endl;
-	buildGrid(screen_width, screen_height, d_triangles, num_triangles);
+	buildTree(screen_width, screen_height, d_triangles, num_triangles);
 	create_space_for_kernels(screen_width, screen_height);
 }
 

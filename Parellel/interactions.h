@@ -5,7 +5,12 @@
  #define DELTA_P 0.1f
  #define TITLE_STRING "Stability"
 
-//#include <GL/freeglut.h>
+#ifdef __APPLE__
+#include <GLUT/glut.h>
+#else
+//#include <GL/glew.h>
+#include <GL/freeglut.h>
+#endif
 #include "interactive_camera.h"
 #include "camera.h"
 
