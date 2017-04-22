@@ -558,6 +558,7 @@ void buildTree(int w, int h, Triangle * triangles, int num_triangles) {
 
     // thrust sort and stuff begin
     thrust::sort_by_key(morton_codes, morton_codes + num_triangles, h_triangles);
+    checkCudaErrors(cudaMemcpy(triangles, h_triangles, sizeof(Triangle) * num_triangles, cudaMemcpyHostToDevice));
     // thrust sort and stuff done
     cudaDeviceSynchronize();
     cout << "sort stuff done" << endl;

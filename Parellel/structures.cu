@@ -197,12 +197,14 @@ __host__ __device__ bool BVHTree::checkIntersect(Ray& ray, int idx) {
 
 __host__ __device__ void BVHTree::intersect(Triangle * triangles, Ray& ray, int idx) {
 	if(idx == -1) return;
-	if(isLeaf[idx]) {
-		triangles[primitive_idx[idx]].intersect(&ray);
-		return;
+	if(checkIntersect(ray, idx)) {
+		if(isLeaf[idx]) {
+			triangles[primitive_idx[idx]].intersect(&ray);
+			return;
+		}
+		intersect(triangles, ray, left[idx]);
+		intersect(triangles, ray, right[idx]);
 	}
-	intersect(triangles, ray, left[idx]);
-	intersect(triangles, ray, right[idx]);
 	return;
 }
 
