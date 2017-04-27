@@ -121,7 +121,7 @@ __device__ void intersect(Triangle* triangles, int num_triangles, Ray* r, Unifor
 // out_rays = Output rays
 // d_out = Output image to be resetted
 ////////////////////////////////////////////////////////////////////////////
-__global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_rays, uchar4* d_out, float** d_coeffs, float3* out_color)
+__global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_rays, uchar4* d_out, float* d_coeffs[7], float3* out_color)
 {
 	if (!camera || !out_rays || !d_out) return;
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -130,10 +130,9 @@ __global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_r
 	float3 dir = camera->get_ray_direction(i, j);
 	int index = i + j * w; // 1D indexing
 	out_rays[index] = Ray(pos, dir);
-	out_rays[index].coeff = 1;
 	d_out[index] = make_uchar4(0, 0, 0, 0);
 	out_color[index] = make_float3(0, 0, 0);
-	for(int i = 0; i < 7; i ++) d_coeffs[i][index] = 0;
+	for(int i = 0; i < 7; i ++) if(d_coeffs[i] != NULL) d_coeffs[i][index] = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -194,7 +193,6 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
 		{
 			float3 R = reflect(I, N);
 			Ray reflectedRay(ray.getPosition() + 1e-4 * R, R);
-			reflectedRay.coeff = in_coeff * KR;
 			out_rays_reflect[index] = reflectedRay;
 			out_coeffs_reflect[index] = in_coeff * KR;
 			finalColor *= (1 - KR);
@@ -412,8 +410,10 @@ void create_space_for_kernels(int w, int h)
 
 	checkCudaErrors(cudaMalloc((void**)&colors, sizeof(float3)*w * h));
 	//checkCudaErrors(cudaMalloc((void**)&d_rays[0], sizeof(Ray)*w*h));
-	for (int i = 0; i < 7; i ++) checkCudaErrors(cudaMalloc((void**)&d_rays[i], sizeof(Ray)*w * h));
-
+	for (int i = 0; i < 7; i ++) {
+		checkCudaErrors(cudaMalloc((void**)&d_rays[i], sizeof(Ray)*w * h));
+		if(i) checkCudaErrors(cudaMalloc((void**)&d_coeffs[i], sizeof(float)*w * h));
+	}
 	for(int i = 0; i < MAXSTREAMS; i++) {
 		cudaEventCreate(&event[i]);
 		cudaStreamCreate(&stream[i]);
@@ -427,13 +427,16 @@ void create_space_for_kernels(int w, int h)
 void free_space_for_kernels()
 {
 	if(colors) checkCudaErrors(cudaFree(colors));
-	for (int i = 0; i < 7; i ++) checkCudaErrors(cudaFree(d_rays[i]));
-
+	for (int i = 0; i < 7; i ++) {
+		checkCudaErrors(cudaFree(d_rays[i]));
+		if(i && d_coeffs[i]) checkCudaErrors(cudaFree(d_coeffs[i]));
+	}
 	for(int i = 0; i < MAXSTREAMS; i++) {
 		cudaEventDestroy(event[i]);
 		cudaStreamDestroy(stream[i]);
 	}
-
+	
+	checkCudaErrors(cudaFree(d_d_coeffs));
 }
 
 void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* triangles, int num_triangles, LightSource* l) {
