@@ -29,7 +29,6 @@ const int MAXSTREAMS = 4;
 cudaEvent_t event[MAXSTREAMS];
 cudaStream_t stream[MAXSTREAMS];
 
-
 // kernel function to compute decay and shading
 __device__ void get_color_from_float3(float3 color, uchar4* cell)
 {
@@ -41,19 +40,19 @@ __device__ void get_color_from_float3(float3 color, uchar4* cell)
 
 __device__ float3 refract(const float3 &I, const float3 &N, const float &ior) 
 { 
-    float cosi = clamp(-1, 1, dotProduct(I, N)); 
-    float etai = 1, etat = ior; 
-    float3 n = N; 
-    if (cosi < 0) { cosi = -cosi; } else { 
-    	float temp = etai;
-    	etai = etat;
-    	etat = temp;
-    	//swap(etai, etat); 
-    	n= -N;
-    } 
-    float eta = etai / etat; 
-    float k = 1 - eta * eta * (1 - cosi * cosi); 
-    return (k < 0) ? make_float3(0,0,0) : (eta * I + (eta * cosi - sqrtf(k)) * n); 
+	float cosi = clamp(-1, 1, dotProduct(I, N)); 
+	float etai = 1, etat = ior; 
+	float3 n = N; 
+	if (cosi < 0) { cosi = -cosi; } else { 
+		float temp = etai;
+		etai = etat;
+		etat = temp;
+		//swap(etai, etat); 
+		n= -N;
+	} 
+	float eta = etai / etat; 
+	float k = 1 - eta * eta * (1 - cosi * cosi); 
+	return (k < 0) ? make_float3(0,0,0) : (eta * I + (eta * cosi - sqrtf(k)) * n); 
 }
 
 __device__ void fresnel(const float3& I, const float3& N, const float& ior, float &kr)
@@ -122,7 +121,7 @@ __device__ void intersect(Triangle* triangles, int num_triangles, Ray* r, Unifor
 // out_rays = Output rays
 // d_out = Output image to be resetted
 ////////////////////////////////////////////////////////////////////////////
-__global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_rays, uchar4* d_out, float* d_coeffs[7], float3* out_color)
+__global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_rays, uchar4* d_out, float** d_coeffs, float3* out_color)
 {
 	if (!camera || !out_rays || !d_out) return;
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -131,13 +130,10 @@ __global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_r
 	float3 dir = camera->get_ray_direction(i, j);
 	int index = i + j * w; // 1D indexing
 	out_rays[index] = Ray(pos, dir);
+	out_rays[index].coeff = 1;
 	d_out[index] = make_uchar4(0, 0, 0, 0);
-
 	out_color[index] = make_float3(0, 0, 0);
-	for (int i = 1; i < 7; i ++)
-	{
-		if (d_coeffs[i] != NULL) d_coeffs[i][index] = 0.0f;
-	}
+	for(int i = 0; i < 7; i ++) d_coeffs[i][index] = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -173,10 +169,11 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
 	flag |= 2*(out_rays_reflect != NULL && out_coeffs_reflect != NULL);
 	if(out_coeffs_reflect != NULL) out_coeffs_reflect[index] = 0;
 	if(out_coeffs_refract != NULL) out_coeffs_refract[index] = 0;
-	//bool will_refract = false;
-	//bool will_reflect = false;
+
 	//Get owned ray
 	Ray ray = rays[index];
+	if (in_coeff < EPSILON || ray.direction == make_float3(0, 0, 0)) return;
+	
 	intersect(triangles, num_triangles, &ray, ug);
 	//bool reflect_over_refract = false;
 	//Do one time intersection
@@ -197,130 +194,43 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
 		{
 			float3 R = reflect(I, N);
 			Ray reflectedRay(ray.getPosition() + 1e-4 * R, R);
+			reflectedRay.coeff = in_coeff * KR;
 			out_rays_reflect[index] = reflectedRay;
 			out_coeffs_reflect[index] = in_coeff * KR;
 			finalColor *= (1 - KR);
 		}
 		else if ((flag & 1) && (flag & 8))
 		{
-			// float3 refractionColor = make_float3(0, 0, 0);
 			// compute fresnel
 			float kr;
 			float3 hitPoint = ray.getPosition();
 			bool outside = (dotProduct(I, N) < 0);
 			float eff_eta = ETA;
-			if(outside) eff_eta = 1 / ETA;
 			fresnel(I, N, eff_eta, kr);
 			float3 bias = N * 1e-4f;
 			// compute refraction if it is not a case of total internal reflection
 			if (kr < 1) {
 				float3 refractionDirection = refract(I, N, eff_eta);
 				float3 refractionRayOrig = outside ? hitPoint - bias : hitPoint + bias;
-				//Ray refractedRay(refractionRayOrig, refractionDirection);
 				out_rays_refract[index] = Ray(refractionRayOrig, refractionDirection);
 				out_coeffs_refract[index] = in_coeff * (1 - kr);
 			}
 			float3 reflectionDirection = reflect(I, N);
 			float3 reflectionRayOrig = outside ? hitPoint + bias : hitPoint - bias;
-			//float3 reflectionColor = castRay(reflectionRayOrig, reflectionDirection, objects, lights, options, depth + 1);
 
 			out_rays_reflect[index] = Ray(reflectionRayOrig, reflectionDirection);
 			out_coeffs_reflect[index] = in_coeff * kr;
-
 			// mix the two
-			//finalColor += reflectionColor * kr + refractionColor * (1 - kr);
 			in_coeff = 0.0;
 		}
 	}
+
 	finalColor *= in_coeff;
-	// out_color[index] = finalColor;
 	atomicAdd(&out_color[index].x, finalColor.x);
 	atomicAdd(&out_color[index].y, finalColor.y);
 	atomicAdd(&out_color[index].z, finalColor.z);
 };
 
-/*
-Color World::shade_ray(Ray ray)
-{
-  if(ray.getLevel() > RECURSION_DEPTH) return background;
-  firstIntersection(ray);
-  if(ray.didHit())
-  {
-	// cout << ray.getDirection() << " " << ray.getIdx() << endl;
-	// cerr << ray.getOrigin() << " " << ray.getDirection() << " " << ray.didHit() << endl;
-	Color shadowColor(0.0,0.0,0.0);
-	bool isShadow = false;
-	//Run Shadow Test
-	const Object* intersectedObject = ray.intersected();
-	for(LightSource* ls : this->lightSourceList) {
-	  Ray shadowRay(ray.getPosition()+0.01*(ls->getPosition()-ray.getPosition()),ls->getPosition()-ray.getPosition());
-	  firstIntersection(shadowRay);
-	  if(shadowRay.didHit()) {
-		isShadow = true;
-		shadowColor = ambient*(intersectedObject->getMaterial()->shade(ray))*(intersectedObject->getMaterial())->ka;
-	  }
-	}
-	//..Compute Shade factor due to light
-	Color lightColor(0.0,0.0,0.0);
-	for(LightSource* ls : this->lightSourceList) {
-	  // cerr << ray.getOrigin() << " " << ray.getDirection() << " " << ray.didHit() << " ";
-	  // cerr << intersectedObject << endl;
-	  lightColor = lightColor + get_light_shade(ray.getPosition(),intersectedObject->getNormalAtPosition(ray.getPosition()),*ls,intersectedObject->getMaterial(),ray.getDirection());
-	}
-	lightColor = lightColor + ambient*(intersectedObject->getMaterial()->shade(ray))*(intersectedObject->getMaterial())->ka;
-	//if(shadowEffect) lightColor = lightColor*intersectedObject->getMaterial()->ka;
-
-	Color finalColor = lightColor;
-	if(isShadow) finalColor = finalColor*(1e-4) + shadowColor*(1 - 1e-4);
-
-	//Reflection
-	auto N = intersectedObject->getNormalAtPosition(ray.getPosition());
-	auto I = ray.getDirection();
-	N.normalize();
-	I.normalize();
-
-	double eta = intersectedObject->getMaterial()->eta;
-	Vector3D T(0.0,0.0,0.0);
-	double t = ray.getParameter();
-	double c = 0;
-	Vector3D k(1.0,1.0,1.0);
-	int level = ray.getLevel();
-	if(intersectedObject->getMaterial()->kr > 0 && intersectedObject->getMaterial()->kt > 0)
-	{
-	  //Dielectrics
-	  auto R = reflect(I,N);
-	  if(dotProduct(ray.getDirection(),N) < 0)
-	  {
-		refract(I,N,eta,T);
-		c = -dotProduct(I,N);
-	  }
-	  else
-	  {
-		k = Vector3D(pow(EULER_CONSTANT,-1.0*0.27*t),pow(EULER_CONSTANT,-1.0*0.45*t),pow(EULER_CONSTANT,-1.0*0.55*t));
-		if(refract(I,-1.0*N,1/eta,T)) c = dotProduct(T,N);
-		else {
-		  Ray temp = Ray(ray.getPosition()+ 1e-4 * R,R,level+1);
-		  return k*shade_ray(temp);
-		}
-	  }
-	  double _R0 = ((eta-1)*(eta-1))/((eta+1)*(eta+1));
-	  double _R = _R0 + (1-_R0)*pow(1-c,5);
-	  Ray temp1 = Ray(ray.getPosition()+ 1e-4 * R,R,level+1);
-	  Ray temp2 = Ray(ray.getPosition()+ 1e-4 * T,T,level*2);
-	  return k*(_R * shade_ray(temp1) + (1-_R)*shade_ray(temp2));
-	}
-	else if(intersectedObject->getMaterial()->kr > 0)
-	{
-	  auto R = reflect(I,N);
-	  Ray reflectedRay(ray.getPosition()+ 1e-4 * R,R, level + 1);
-
-	  finalColor = finalColor + (intersectedObject->getMaterial()->kr)*shade_ray(reflectedRay);
-	}
-	return finalColor;
-  }
-  return background;
-}
-*/
 ///////////////////////////////////////////////////////////////////
 // Convert to RGBA kernel
 // Parameters:
@@ -502,11 +412,7 @@ void create_space_for_kernels(int w, int h)
 
 	checkCudaErrors(cudaMalloc((void**)&colors, sizeof(float3)*w * h));
 	//checkCudaErrors(cudaMalloc((void**)&d_rays[0], sizeof(Ray)*w*h));
-	for (int i = 0; i < 7; i ++)
-	{
-		checkCudaErrors(cudaMalloc((void**)&d_rays[i], sizeof(Ray)*w * h));
-		if (i) checkCudaErrors(cudaMalloc((void**)&d_coeffs[i], sizeof(float)*w * h));
-	}
+	for (int i = 0; i < 7; i ++) checkCudaErrors(cudaMalloc((void**)&d_rays[i], sizeof(Ray)*w * h));
 
 	for(int i = 0; i < MAXSTREAMS; i++) {
 		cudaEventCreate(&event[i]);
@@ -520,19 +426,14 @@ void create_space_for_kernels(int w, int h)
 
 void free_space_for_kernels()
 {
-	//if(colors) checkCudaErrors(cudaFree(colors));
-	for (int i = 0; i < 7; i ++)
-	{
-		checkCudaErrors(cudaFree(d_rays[i]));
-		if (i && d_coeffs[i]) checkCudaErrors(cudaFree(d_coeffs[i]));
-	}
+	if(colors) checkCudaErrors(cudaFree(colors));
+	for (int i = 0; i < 7; i ++) checkCudaErrors(cudaFree(d_rays[i]));
 
 	for(int i = 0; i < MAXSTREAMS; i++) {
 		cudaEventDestroy(event[i]);
 		cudaStreamDestroy(stream[i]);
 	}
 
-	checkCudaErrors(cudaFree(d_d_coeffs));
 }
 
 void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* triangles, int num_triangles, LightSource* l) {
@@ -558,8 +459,6 @@ void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* trian
 	raytrace <<< gridSize, blockSize, 0, stream[1]>>>(colors, d_coeffs[2], w, h, d_rays[2], d_rays[5], d_coeffs[5], d_rays[6], d_coeffs[6], triangles, num_triangles, l, d_uniform_grid);
 	cudaEventRecord(event[1], stream[0]);
 	cudaEventRecord(event[2], stream[1]);
-	//cudaEventRecord(event);
-	// cudaEventSynchronize(event);
 	
 	//Run these 4 concurrently
 	//A11
@@ -572,8 +471,6 @@ void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* trian
 	//A22
 	cudaStreamWaitEvent(stream[3], event[2], 0);
 	raytrace <<< gridSize, blockSize, 0, stream[3]>>>(colors, d_coeffs[6], w, h, d_rays[6], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
-	//cudaEventRecord(event);
-	// cudaEventSynchronize(event);
 
 	//Final Output Array
 	convert_to_rgba <<< gridSize, blockSize>>>(colors, d_out, w, h);
