@@ -8,11 +8,11 @@
 #include "helper_cuda.h"
 #include "cuda_profiler_api.h"
 #include "utilities.h"
-#define TX 32
-#define TY 32
+#define TX 16
+#define TY 16
 #define AMBIENT_COLOR make_float3(0.235294, 0.67451, 0.843137)
-#define KR 0.001
-#define KT 0.1
+#define KR 0.3
+#define KT 0.3
 #define EULER_CONSTANT 2.718
 #define eta 4.0
 #define KA 0.4
@@ -25,8 +25,9 @@ float3* colors = 0;
 Ray* d_rays[7];
 float* d_coeffs[7];
 float** d_d_coeffs = NULL;
-cudaEvent_t event;
-cudaStream_t streamA1, streamA2, streamA3, streamA4;
+const int MAXSTREAMS = 4;
+cudaEvent_t event[MAXSTREAMS];
+cudaStream_t stream[MAXSTREAMS];
 
 
 // kernel function to compute decay and shading
@@ -150,92 +151,60 @@ __global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_r
 __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray* rays, Ray* out_rays_reflect, float* out_coeffs_reflect, Ray* out_rays_refract, float* out_coeffs_refract, Triangle* triangles, int num_triangles, LightSource* l, UniformGrid * ug)
 {
 	if (out_color == NULL || rays == NULL) return;
-	int i = blockDim.x * blockIdx.x + threadIdx.x;
-	int j = blockDim.y * blockIdx.y + threadIdx.y;
-	int index = i + j * w;
+	//int i = blockDim.x * blockIdx.x + threadIdx.x;
+	//int j = blockDim.y * blockIdx.y + threadIdx.y;
+	int index = (blockDim.x * blockIdx.x + threadIdx.x) + (blockDim.y * blockIdx.y + threadIdx.y) * w;
 	//Switches
-	bool in_coeff = (in_coeffs != NULL) ? in_coeffs[index] : 1.00;
+	float in_coeff = ((in_coeffs != NULL) ? in_coeffs[index] : 1.00);
 
 	if (in_coeff < EPSILON || rays[index].direction == make_float3(0, 0, 0)) return;
 
-	bool can_refract = (out_rays_refract != NULL && out_coeffs_refract != NULL);
-	bool can_reflect = (out_rays_reflect != NULL && out_coeffs_reflect != NULL);
-	bool will_refract = false;
-	bool will_reflect = false;
+	int flag = 0;
+	flag |= (out_rays_refract != NULL && out_coeffs_refract != NULL);
+	flag |= 2*(out_rays_reflect != NULL && out_coeffs_reflect != NULL);
+	//bool will_refract = false;
+	//bool will_reflect = false;
 	//Get owned ray
 	Ray ray = rays[index];
 	intersect(triangles, num_triangles, &ray, ug);
 	//bool reflect_over_refract = false;
 	//Do one time intersection
-	float3 finalColor = make_float3(0, 0, 0);
-	if (!ray.has_intersected) finalColor = AMBIENT_COLOR;
-	else
-	{
+	float3 finalColor = AMBIENT_COLOR;
+	Triangle* intersected = 0;
+	if (ray.has_intersected) {
+		intersected = ray.intersected;
 		float3 I = normalize(ray.direction);
-		float3 N = normalize(ray.intersected->get_normal());
-		will_reflect = (ray.intersected->type_of_material == REFLECTIVE);
-		will_refract = (ray.intersected->type_of_material == REFRACTIVE);
-		finalColor = get_light_color(get_point(&ray, ray.t), N, l, ray.intersected, I);
-		finalColor = finalColor + (ray.intersected)->color * KA;
-		if ((!can_reflect && !can_refract) || (!will_reflect && !will_refract)) {  }
+		float3 N = normalize(intersected->get_normal());
+		flag |= 4*(intersected->type_of_material == REFLECTIVE);
+		flag |= 8*(intersected->type_of_material == REFRACTIVE);
+		//will_reflect = (intersected->type_of_material == REFLECTIVE);
+		//will_refract = (intersected->type_of_material == REFRACTIVE);
+		finalColor = get_light_color(get_point(&ray, ray.t), N, l, intersected, I);
+		finalColor += (intersected)->color * KA;
 		//Reflect
-		else if (can_reflect && will_reflect)
+		if ((flag & 2) && (flag & 4))
 		{
 			float3 R = reflect(I, N);
 			Ray reflectedRay(ray.getPosition() + 1e-4 * R, R);
 			out_rays_reflect[index] = reflectedRay;
 			out_coeffs_reflect[index] = in_coeff * KR;
-			finalColor = finalColor * (1 - KR);
+			finalColor *= (1 - KR);
 		}
-		else if (can_refract && will_refract)
+		else if ((flag & 1) && (flag & 8))
 		{
-			/*
-			float c = 0;//,k = 0;
-			float3 R = reflect(I,N);
-			float3 T;
-			if(dotProduct(I,N) < 0)
-			{
-			  refract(I,N,eta,T);
-			  c = -dotProduct(I,N);
-			}
-			else
-			{
-			  //k = 1;
-			  //k = make_float3(pow(EULER_CONSTANT,-1.0*0.27*t),pow(EULER_CONSTANT,-1.0*0.45*t),pow(EULER_CONSTANT,-1.0*0.55*t));
-			  if(refract(I,-1.0*N,1/eta,T)) c = dotProduct(T,N);
-			  else {
-				Ray reflectedRay(ray.getPosition()+ 1e-4 * R,R);
-				out_rays_reflect[index] = reflectedRay;
-				out_coeffs_reflect[index] = in_coeff * KR;
-				finalColor = finalColor * (1-KR);
-				//return k*shade_ray(temp);
-				reflect_over_refract = true;
-			  }
-			}
-			if(!reflect_over_refract)
-			{
-			  float _R0 = ((eta-1)*(eta-1))/((eta+1)*(eta+1));
-			  float _R = _R0 + (1-_R0)*pow(1-c,5);
-			  Ray temp1 = Ray(ray.getPosition()+ 1e-4 * R,R);
-			  Ray temp2 = Ray(ray.getPosition()+ 1e-4 * T,T);
-			  out_rays_reflect[index] = temp1;
-			  out_coeffs_reflect[index] = in_coeff * _R;
-			  out_rays_refract[index] = temp2;
-			  out_coeffs_refract[index] = in_coeff * (1-_R);
-			  in_coeff = 0;
-			}
-			*/
 			float3 refractionColor = make_float3(0, 0, 0);
 			// compute fresnel
 			float kr;
 			float3 hitPoint = ray.getPosition();
-			fresnel(I, N, eta, kr);
 			bool outside = (dotProduct(I, N) < 0);
+			float eff_eta = eta;
+			if(outside) eff_eta = 1 / eta;
+			fresnel(I, N, eff_eta, kr);
 			float3 bias = N * 1e-4f;
 			// compute refraction if it is not a case of total internal reflection
 			if (kr < 1) {
 				float3 refractionDirection;
-				refract(I, N, eta, refractionDirection);
+				refract(I, N, eff_eta, refractionDirection);
 				refractionDirection = normalize(refractionDirection);
 				float3 refractionRayOrig = outside ? hitPoint - bias : hitPoint + bias;
 				Ray refractedRay(refractionRayOrig, refractionDirection);
@@ -254,9 +223,8 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
 			//finalColor += reflectionColor * kr + refractionColor * (1 - kr);
 			in_coeff = 0.0;
 		}
-
 	}
-	finalColor = finalColor * in_coeff;
+	finalColor *= in_coeff;
 	// out_color[index] = finalColor;
 	atomicAdd(&out_color[index].x, finalColor.x);
 	atomicAdd(&out_color[index].y, finalColor.y);
@@ -532,11 +500,10 @@ void create_space_for_kernels(int w, int h)
 		if (i) checkCudaErrors(cudaMalloc((void**)&d_coeffs[i], sizeof(float)*w * h));
 	}
 
-	cudaEventCreate(&event);
-	cudaStreamCreate(&streamA1);
-	cudaStreamCreate(&streamA2);
-	cudaStreamCreate(&streamA3);
-	cudaStreamCreate(&streamA4);
+	for(int i = 0; i < MAXSTREAMS; i++) {
+		cudaEventCreate(&event[i]);
+		cudaStreamCreate(&stream[i]);
+	}
 
 	d_coeffs[0] = NULL;
 	checkCudaErrors(cudaMalloc((void**)&d_d_coeffs, sizeof(float*) * 7));
@@ -552,11 +519,10 @@ void free_space_for_kernels()
 		if (i && d_coeffs[i]) checkCudaErrors(cudaFree(d_coeffs[i]));
 	}
 
-	cudaStreamDestroy(streamA1);
-	cudaStreamDestroy(streamA2);
-	cudaStreamDestroy(streamA3);
-	cudaStreamDestroy(streamA4);
-	cudaEventDestroy(event);
+	for(int i = 0; i < MAXSTREAMS; i++) {
+		cudaEventDestroy(event[i]);
+		cudaStreamDestroy(stream[i]);
+	}
 
 	checkCudaErrors(cudaFree(d_d_coeffs));
 }
@@ -566,39 +532,44 @@ void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* trian
 	const dim3 gridSize = dim3(w / TX, h / TY);
 
 	//Start Procedure
-	cudaProfilerStart();
+	// cudaProfilerStart();
 
 	createRaysAndResetImage <<< gridSize, blockSize>>>(camera, w, h, d_rays[0], d_out, d_d_coeffs, colors);
-	cudaDeviceSynchronize();
+	// cudaDeviceSynchronize();
 
 	//Karlo Ray trace 1000 baar yahaan
 	//A
-	raytrace <<< gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[0], w, h, d_rays[0], d_rays[1], d_coeffs[1], d_rays[2], d_coeffs[2], triangles, num_triangles, l, d_uniform_grid);
-	//cudaEventRecord(event);
-	cudaDeviceSynchronize();
-
+	raytrace <<< gridSize, blockSize, 0, stream[0]>>>(colors, d_coeffs[0], w, h, d_rays[0], d_rays[1], d_coeffs[1], d_rays[2], d_coeffs[2], triangles, num_triangles, l, d_uniform_grid);
+	cudaEventRecord(event[0], stream[0]);
 	//Run these 2 concurrently
+	
 	//A1
-	raytrace <<< gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[1], w, h, d_rays[1], d_rays[3], d_coeffs[3], d_rays[4], d_coeffs[4], triangles, num_triangles, l, d_uniform_grid);
+	raytrace <<< gridSize, blockSize, 0, stream[0]>>>(colors, d_coeffs[1], w, h, d_rays[1], d_rays[3], d_coeffs[3], d_rays[4], d_coeffs[4], triangles, num_triangles, l, d_uniform_grid);
 	//A2
-	raytrace <<< gridSize, blockSize, 0, streamA2>>>(colors, d_coeffs[2], w, h, d_rays[2], d_rays[5], d_coeffs[5], d_rays[6], d_coeffs[6], triangles, num_triangles, l, d_uniform_grid);
+	cudaStreamWaitEvent(stream[1], event[0], 0);
+	raytrace <<< gridSize, blockSize, 0, stream[1]>>>(colors, d_coeffs[2], w, h, d_rays[2], d_rays[5], d_coeffs[5], d_rays[6], d_coeffs[6], triangles, num_triangles, l, d_uniform_grid);
+	cudaEventRecord(event[1], stream[0]);
+	cudaEventRecord(event[2], stream[1]);
 	//cudaEventRecord(event);
-	cudaDeviceSynchronize();
-
+	// cudaEventSynchronize(event);
+	
 	//Run these 4 concurrently
 	//A11
-	raytrace <<< gridSize, blockSize, 0, streamA1>>>(colors, d_coeffs[3], w, h, d_rays[3], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+	raytrace <<< gridSize, blockSize, 0, stream[0]>>>(colors, d_coeffs[3], w, h, d_rays[3], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
 	//A12
-	raytrace <<< gridSize, blockSize, 0, streamA2>>>(colors, d_coeffs[4], w, h, d_rays[4], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+	cudaStreamWaitEvent(stream[2], event[1], 0);
+	raytrace <<< gridSize, blockSize, 0, stream[2]>>>(colors, d_coeffs[4], w, h, d_rays[4], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
 	//A21
-	raytrace <<< gridSize, blockSize, 0, streamA3>>>(colors, d_coeffs[5], w, h, d_rays[5], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+	raytrace <<< gridSize, blockSize, 0, stream[1]>>>(colors, d_coeffs[5], w, h, d_rays[5], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
 	//A22
-	raytrace <<< gridSize, blockSize, 0, streamA4>>>(colors, d_coeffs[6], w, h, d_rays[6], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
+	cudaStreamWaitEvent(stream[3], event[2], 0);
+	raytrace <<< gridSize, blockSize, 0, stream[3]>>>(colors, d_coeffs[6], w, h, d_rays[6], NULL, NULL, NULL, NULL, triangles, num_triangles, l, d_uniform_grid);
 	//cudaEventRecord(event);
-	cudaDeviceSynchronize();
+	// cudaEventSynchronize(event);
 
 	//Final Output Array
 	convert_to_rgba <<< gridSize, blockSize>>>(colors, d_out, w, h);
-	cudaDeviceSynchronize();
-	cudaProfilerStop();
+	cudaEventSynchronize(event[1]);
+	cudaEventSynchronize(event[2]);
+	// cudaProfilerStop();
 }

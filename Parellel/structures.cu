@@ -5,59 +5,6 @@
 
 const float SICK_FLT_MAX = 1e36;
 const float SICK_FLT_MIN = -1e36;
-__host__ __device__ bool operator==(const float3& v1, const float3& v2)
-{
-	if (v1.x != v2.x) return false;
-	if (v1.y != v2.y) return false;
-	if (v1.z != v2.z) return false;
-	return true;
-}
-
-__host__ __device__ bool operator!=(const float3& v1, const float3& v2)
-{
-	return !(v1 == v2);
-}
-
-__host__ __device__ float3 operator+(const float3& v1, const float3& v2)
-{
-	return make_float3(v1.x + v2.x, v1.y + v2.y, v1.z + v2.z);
-}
-
-__host__ __device__ float3 operator+(const float3& v1, const double& v2)
-{
-	return make_float3(v1.x + v2, v1.y + v2, v1.z + v2);
-}
-
-__host__ __device__ float3 operator-(const float3& v1, const float3& v2)
-{
-	return make_float3(v1.x - v2.x, v1.y - v2.y, v1.z - v2.z);
-}
-
-__host__ __device__ float3 operator/(const float3& v, float scalar)
-{
-	return make_float3(v.x / scalar, v.y / scalar, v.z / scalar);
-}
-
-__host__ __device__ float3 operator*(const float3& v, float scalar)
-{
-	return make_float3(v.x * scalar, v.y * scalar, v.z * scalar);
-}
-
-//Unary
-__host__ __device__ float3 operator-(const float3& v)
-{
-	return make_float3(-v.x, -v.y, -v.z);
-}
-
-__host__ __device__ float3 operator*(float scalar, const float3& v)
-{
-	return v * scalar;
-}
-
-__host__ __device__ float3 operator*(const float3& v, const float3& v1)
-{
-	return make_float3(v.x * v1.x, v.y * v1.y, v.z * v1.z);
-}
 
 __host__ __device__ float squaredlength(const float3& f)
 {

@@ -169,16 +169,24 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
 			t.vertexB = vertices[idx[1][0] - 1] + make_float3(-5, 0, 0);
 			t.vertexC = vertices[idx[2][0] - 1] + make_float3(-5, 0, 0);
 			t.color = DEFAULT_COLOR;
-			t.type_of_material = DIFFUSE;
+			t.type_of_material = REFLECTIVE;
 			Triangle t1;
 			t1.vertexA = vertices[idx[0][0] - 1] + make_float3(5, 0, 0);
 			t1.vertexB = vertices[idx[1][0] - 1] + make_float3(5, 0, 0);
 			t1.vertexC = vertices[idx[2][0] - 1] + make_float3(5, 0, 0);
-			t1.color = DEFAULT_COLOR;
-			t1.type_of_material = DIFFUSE;
+			t1.color = make_float3(0,0.1,0.6);
+			t1.type_of_material = REFRACTIVE;
+
+			Triangle t2;
+			t2.vertexA = vertices[idx[0][0] - 1] + make_float3(0, 5, 0);
+			t2.vertexB = vertices[idx[1][0] - 1] + make_float3(0, 5, 0);
+			t2.vertexC = vertices[idx[2][0] - 1] + make_float3(0, 5, 0);
+			t2.color = make_float3(0.4,0.1,0.6);
+			t2.type_of_material = DIFFUSE;
 
 			if (h_triangles.size() < static_cast<unsigned int>(num_max)) h_triangles.push_back(t);
 			if (h_triangles.size() < static_cast<unsigned int>(num_max)) h_triangles.push_back(t1);
+			if (h_triangles.size() < static_cast<unsigned int>(num_max)) h_triangles.push_back(t2);
 			// cerr << "rendered\n";
 		} else if (c == "v") {
 			is >> v[0] >> v[1] >> v[2];
@@ -219,7 +227,7 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
 	h_camera = new Camera(camera_position, camera_target, camera_up, camera_fovy, screen_width, screen_height);
 	interaction = new InteractiveCamera();
 	interaction->buildRenderCamera(h_camera);
-
+	cudaHostRegister(h_camera, sizeof(Camera), 0);
 	//Create Light Source
 	h_light = new LightSource;
 	h_light->position = make_float3(-10, -10, 0);
@@ -257,6 +265,7 @@ void exitfunc() {
 	checkCudaErrors(cudaFree(d_out));
 #endif
 	delete h_light;
+	cudaHostUnregister(h_camera);
 	delete h_camera;
 	delete interaction;
 	// free_space_for_kernels();
