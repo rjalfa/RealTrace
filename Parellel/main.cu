@@ -169,7 +169,7 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
 			t.vertexB = vertices[idx[1][0] - 1] + make_float3(-5, 0, 0);
 			t.vertexC = vertices[idx[2][0] - 1] + make_float3(-5, 0, 0);
 			t.color = DEFAULT_COLOR;
-			t.type_of_material = REFLECTIVE;
+			t.type_of_material = REFRACTIVE;
 			Triangle t1;
 			t1.vertexA = vertices[idx[0][0] - 1] + make_float3(5, 0, 0);
 			t1.vertexB = vertices[idx[1][0] - 1] + make_float3(5, 0, 0);
@@ -182,7 +182,7 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
 			t2.vertexB = vertices[idx[1][0] - 1] + make_float3(0, 5, 0);
 			t2.vertexC = vertices[idx[2][0] - 1] + make_float3(0, 5, 0);
 			t2.color = make_float3(0.4,0.1,0.6);
-			t2.type_of_material = DIFFUSE;
+			t2.type_of_material = REFRACTIVE;
 
 			if (h_triangles.size() < static_cast<unsigned int>(num_max)) h_triangles.push_back(t);
 			if (h_triangles.size() < static_cast<unsigned int>(num_max)) h_triangles.push_back(t1);

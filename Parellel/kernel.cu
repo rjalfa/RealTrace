@@ -14,7 +14,7 @@
 #define KR 0.3
 #define KT 0.3
 #define EULER_CONSTANT 2.718
-#define eta 4.0
+#define ETA 1.5
 #define KA 0.4
 
 __device__ unsigned char clip(float x) { return x > 255 ? 255 : (x < 0 ? 0 : x); }
@@ -39,12 +39,21 @@ __device__ void get_color_from_float3(float3 color, uchar4* cell)
 	cell->w = 255;
 }
 
-__device__ bool refract(const float3& I, const float3& N, const float e, float3& T)
-{
-	float k = 1.0 - e * e * (1.0 - dotProduct(N, I) * dotProduct(N, I));
-	if (k < 0) return false;
-	T = e * I - (e * dotProduct(N, I) + sqrt(k)) * N;
-	return true;
+__device__ float3 refract(const float3 &I, const float3 &N, const float &ior) 
+{ 
+    float cosi = clamp(-1, 1, dotProduct(I, N)); 
+    float etai = 1, etat = ior; 
+    float3 n = N; 
+    if (cosi < 0) { cosi = -cosi; } else { 
+    	float temp = etai;
+    	etai = etat;
+    	etat = temp;
+    	//swap(etai, etat); 
+    	n= -N;
+    } 
+    float eta = etai / etat; 
+    float k = 1 - eta * eta * (1 - cosi * cosi); 
+    return (k < 0) ? make_float3(0,0,0) : (eta * I + (eta * cosi - sqrtf(k)) * n); 
 }
 
 __device__ void fresnel(const float3& I, const float3& N, const float& ior, float &kr)
@@ -156,12 +165,14 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
 	int index = (blockDim.x * blockIdx.x + threadIdx.x) + (blockDim.y * blockIdx.y + threadIdx.y) * w;
 	//Switches
 	float in_coeff = ((in_coeffs != NULL) ? in_coeffs[index] : 1.00);
-
+	in_coeff = clamp(in_coeff, 0, 1);
 	if (in_coeff < EPSILON || rays[index].direction == make_float3(0, 0, 0)) return;
 
 	int flag = 0;
 	flag |= (out_rays_refract != NULL && out_coeffs_refract != NULL);
 	flag |= 2*(out_rays_reflect != NULL && out_coeffs_reflect != NULL);
+	if(out_coeffs_reflect != NULL) out_coeffs_reflect[index] = 0;
+	if(out_coeffs_refract != NULL) out_coeffs_refract[index] = 0;
 	//bool will_refract = false;
 	//bool will_reflect = false;
 	//Get owned ray
@@ -192,32 +203,29 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
 		}
 		else if ((flag & 1) && (flag & 8))
 		{
-			float3 refractionColor = make_float3(0, 0, 0);
+			// float3 refractionColor = make_float3(0, 0, 0);
 			// compute fresnel
 			float kr;
 			float3 hitPoint = ray.getPosition();
 			bool outside = (dotProduct(I, N) < 0);
-			float eff_eta = eta;
-			if(outside) eff_eta = 1 / eta;
+			float eff_eta = ETA;
+			if(outside) eff_eta = 1 / ETA;
 			fresnel(I, N, eff_eta, kr);
 			float3 bias = N * 1e-4f;
 			// compute refraction if it is not a case of total internal reflection
 			if (kr < 1) {
-				float3 refractionDirection;
-				refract(I, N, eff_eta, refractionDirection);
-				refractionDirection = normalize(refractionDirection);
+				float3 refractionDirection = refract(I, N, eff_eta);
 				float3 refractionRayOrig = outside ? hitPoint - bias : hitPoint + bias;
-				Ray refractedRay(refractionRayOrig, refractionDirection);
-				out_rays_refract[index] = refractedRay;
+				//Ray refractedRay(refractionRayOrig, refractionDirection);
+				out_rays_refract[index] = Ray(refractionRayOrig, refractionDirection);
 				out_coeffs_refract[index] = in_coeff * (1 - kr);
-				//refractionColor = castRay(refractionRayOrig, refractionDirection, objects, lights, options, depth + 1);
 			}
-			float3 reflectionDirection = normalize(reflect(I, N));
+			float3 reflectionDirection = reflect(I, N);
 			float3 reflectionRayOrig = outside ? hitPoint + bias : hitPoint - bias;
 			//float3 reflectionColor = castRay(reflectionRayOrig, reflectionDirection, objects, lights, options, depth + 1);
 
-			out_rays_refract[index] = Ray(reflectionRayOrig, reflectionDirection);
-			out_coeffs_refract[index] = in_coeff * kr;
+			out_rays_reflect[index] = Ray(reflectionRayOrig, reflectionDirection);
+			out_coeffs_reflect[index] = in_coeff * kr;
 
 			// mix the two
 			//finalColor += reflectionColor * kr + refractionColor * (1 - kr);

@@ -110,7 +110,7 @@ struct Ray
 		direction = direction_p;
 		has_intersected = false;
 		intersected = 0;
-		t = -1;
+		t = 1e12;
 	}
 };
 
