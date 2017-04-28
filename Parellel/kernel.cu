@@ -55,7 +55,7 @@ __device__ float3 refract(const float3 &I, const float3 &N, const float &ior)
 	return (k < 0) ? make_float3(0,0,0) : (eta * I + (eta * cosi - __fsqrt_rz(k)) * n); 
 }
 
-__device__ void fresnel(const float3& I, const float3& N, const float& ior, float &kr)
+__device__ __forceinline__ void fresnel(const float3& I, const float3& N, const float& ior, float &kr)
 {
 	float cosi = clamp(-1, 1, dotProduct(I, N));
 	float etai = 1, etat = ior;

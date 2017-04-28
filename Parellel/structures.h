@@ -10,67 +10,67 @@ using namespace std;
 class Triangle;
 
 //Structures
-__host__ __device__ inline bool operator==(const float3& v1, const float3& v2)
+__host__ __device__ __forceinline__ bool operator==(const float3& v1, const float3& v2)
 {
 	return (v1.x == v2.x) && (v1.y == v2.y) && (v1.z == v2.z);
 }
 
-__host__ __device__ inline bool operator!=(const float3& v1, const float3& v2)
+__host__ __device__ __forceinline__ bool operator!=(const float3& v1, const float3& v2)
 {
 	return !(v1 == v2);
 }
 
-__host__ __device__ inline void operator+=(float3& v1, const float3& v2)
+__host__ __device__ __forceinline__ void operator+=(float3& v1, const float3& v2)
 {
 	v1.x += v2.x;
 	v1.y += v2.y;
 	v1.z += v2.z;
 }
 
-__host__ __device__ inline void operator*=(float3& v1, const float& v2)
+__host__ __device__ __forceinline__ void operator*=(float3& v1, const float& v2)
 {
 	v1.x *= v2;
 	v1.y *= v2;
 	v1.z *= v2;
 }
 
-__host__ __device__ inline float3 operator+(const float3& v1, const float3& v2)
+__host__ __device__ __forceinline__ float3 operator+(const float3& v1, const float3& v2)
 {
 	return make_float3(v1.x + v2.x, v1.y + v2.y, v1.z + v2.z);
 }
 
-__host__ __device__ inline float3 operator+(const float3& v1, const double& v2)
+__host__ __device__ __forceinline__ float3 operator+(const float3& v1, const double& v2)
 {
 	return make_float3(v1.x + v2, v1.y + v2, v1.z + v2);
 }
 
-__host__ __device__ inline float3 operator-(const float3& v1, const float3& v2)
+__host__ __device__ __forceinline__ float3 operator-(const float3& v1, const float3& v2)
 {
 	return make_float3(v1.x - v2.x, v1.y - v2.y, v1.z - v2.z);
 }
 
-__host__ __device__ inline float3 operator/(const float3& v, float scalar)
+__host__ __device__ __forceinline__ float3 operator/(const float3& v, float scalar)
 {
 	return make_float3(v.x / scalar, v.y / scalar, v.z / scalar);
 }
 
-__host__ __device__ inline float3 operator*(const float3& v, float scalar)
+__host__ __device__ __forceinline__ float3 operator*(const float3& v, float scalar)
 {
 	return make_float3(v.x * scalar, v.y * scalar, v.z * scalar);
 }
 
 //Unary
-__host__ __device__ inline float3 operator-(const float3& v)
+__host__ __device__ __forceinline__ float3 operator-(const float3& v)
 {
 	return make_float3(-v.x, -v.y, -v.z);
 }
 
-__host__ __device__ inline float3 operator*(float scalar, const float3& v)
+__host__ __device__ __forceinline__ float3 operator*(float scalar, const float3& v)
 {
 	return v * scalar;
 }
 
-__host__ __device__ inline float3 operator*(const float3& v, const float3& v1)
+__host__ __device__ __forceinline__ float3 operator*(const float3& v, const float3& v1)
 {
 	return make_float3(v.x * v1.x, v.y * v1.y, v.z * v1.z);
 }
