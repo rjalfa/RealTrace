@@ -183,7 +183,7 @@ __host__ __device__ void Triangle::getWorldBound(float& xmin, float& xmax, float
 	}
 }
 
-__device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) {
+__device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray, float in_coeff) {
 	// check ray against overall grid bounds
 	__shared__ float3 sh_bounds_a[2];
 
@@ -193,6 +193,8 @@ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) {
 		sh_bounds_a[1] = bounds_a[1];
 	}
 	__syncthreads();
+
+	if(in_coeff == 0 || ray.direction == make_float3(0, 0, 0)) return false;
 
 	float rayT;
 	float dirx = ray.direction.x, diry = ray.direction.y, dirz = ray.direction.z;

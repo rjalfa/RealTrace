@@ -185,7 +185,7 @@ public:
 	};
 	__host__ void initialize(int num_triangles);
 //	__host__ __device__ void buildGrid(Triangle * p);
-	__device__ bool intersect(Triangle * triangles, Ray& ray);
+	__device__ bool intersect(Triangle * triangles, Ray& ray, float in_coeff);
 	__host__ __device__ int posToVoxel(const float pos_comp, int axis);
 	__host__ __device__ float voxelToPos(int p, int axis);
 	__host__ __device__ int offset(float x, float y, float z);

@@ -94,7 +94,7 @@ __device__ void intersect(Triangle* triangles, int num_triangles, Ray* r)
 
 //Shared Memory Loop Intersect
 
-__device__ inline void intersect(Triangle* triangles, int num_triangles, Ray* r, UniformGrid * ug)
+__device__ inline void intersect(Triangle* triangles, int num_triangles, Ray* r, UniformGrid * ug, float in_coeff)
 {
 //  __shared__ Triangle localObjects[32];
 //  int triangles_to_scan = num_triangles;
@@ -109,7 +109,7 @@ __device__ inline void intersect(Triangle* triangles, int num_triangles, Ray* r,
 //    triangles_to_scan -= 32;
 //    __syncthreads();
 //  }
-	ug->intersect(triangles, *r);
+	ug->intersect(triangles, *r, in_coeff);
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -163,7 +163,6 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
 	in_coeff = __saturatef(in_coeff);
 	//clamp(in_coeff, 0, 1);
 	Ray ray = rays[index];
-	if (in_coeff < EPSILON || ray.direction == make_float3(0, 0, 0)) return;
 
 	int flag = 0;
 	flag |= (out_rays_refract != NULL && out_coeffs_refract != NULL);
@@ -172,9 +171,9 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
 	if(out_coeffs_refract != NULL) out_coeffs_refract[index] = 0;
 
 	//Get owned ray
-	if (in_coeff < EPSILON || ray.direction == make_float3(0, 0, 0)) return;
 	
-	intersect(triangles, num_triangles, &ray, ug);
+	intersect(triangles, num_triangles, &ray, ug, in_coeff);
+	if (in_coeff < EPSILON || ray.direction == make_float3(0, 0, 0)) return;
 	//bool reflect_over_refract = false;
 	//Do one time intersection
 	float3 finalColor = AMBIENT_COLOR;
