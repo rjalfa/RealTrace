@@ -89,7 +89,7 @@ __device__ void Voxel::addPrimitive(UniformGrid * ug, int i, int idx) {
 	ug->index_pool[req_idx] = i;
 }
 
-__host__ __device__ bool Voxel::intersect(UniformGrid * ug, Triangle * triangles, Ray& ray, int idx) {
+__device__ bool Voxel::intersect(UniformGrid * ug, Triangle * triangles, Ray& ray, int idx) {
 	int low = ug->lower_limit[idx], high = ug->upper_limit[idx];
 	bool hitSomething = false;
 	for (int i = low; i < high; i++) {
@@ -183,24 +183,32 @@ __host__ __device__ void Triangle::getWorldBound(float& xmin, float& xmax, float
 	}
 }
 
-__host__ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) {
+__device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray) {
 	// check ray against overall grid bounds
+	__shared__ float3 sh_bounds_a[2];
+
+	if(threadIdx.x == 0 && threadIdx.y == 0)
+	{
+		sh_bounds_a[0] = bounds_a[0];
+		sh_bounds_a[1] = bounds_a[1];
+	}
+	__syncthreads();
 
 	float rayT;
 	float dirx = ray.direction.x, diry = ray.direction.y, dirz = ray.direction.z;
 	{
 		float tmin, tmax, tymin, tymax, tzmin, tzmax;
 		bool signx = (dirx < 0), signy = (diry < 0), signz = (dirz < 0);
-		tmin = (bounds_a[signx].x - ray.origin.x) / dirx;
-		tmax = (bounds_a[1 - signx].x - ray.origin.x) / dirx;
-		tymin = (bounds_a[signy].y - ray.origin.y) / diry;
-		tymax = (bounds_a[1 - signy].y - ray.origin.y) / diry;
+		tmin = (sh_bounds_a[signx].x - ray.origin.x) / dirx;
+		tmax = (sh_bounds_a[1 - signx].x - ray.origin.x) / dirx;
+		tymin = (sh_bounds_a[signy].y - ray.origin.y) / diry;
+		tymax = (sh_bounds_a[1 - signy].y - ray.origin.y) / diry;
 		if (tmin > tymax || tymin > tmax) return false;
 		if (tymin > tmin) tmin = tymin;
 		if (tymax < tmax) tmax = tymax;
 
-		tzmin = (bounds_a[signz].z - ray.origin.z) / dirz;
-		tzmax = (bounds_a[1 - signz].z - ray.origin.z) / dirz;
+		tzmin = (sh_bounds_a[signz].z - ray.origin.z) / dirz;
+		tzmax = (sh_bounds_a[1 - signz].z - ray.origin.z) / dirz;
 
 		if ((tmin > tzmax) || (tzmin > tmax)) return false;
 

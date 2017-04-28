@@ -160,7 +160,7 @@ class UniformGrid;
 class Voxel {
 public:
 	__device__ static void addPrimitive(UniformGrid * ug, int i, int idx);
-	__host__ __device__ static bool intersect(UniformGrid * ug, Triangle * triangles, Ray& ray, int idx);
+	__device__ static bool intersect(UniformGrid * ug, Triangle * triangles, Ray& ray, int idx);
 };
 
 class UniformGrid {
@@ -185,7 +185,7 @@ public:
 	};
 	__host__ void initialize(int num_triangles);
 //	__host__ __device__ void buildGrid(Triangle * p);
-	__host__ __device__ bool intersect(Triangle * triangles, Ray& ray);
+	__device__ bool intersect(Triangle * triangles, Ray& ray);
 	__host__ __device__ int posToVoxel(const float pos_comp, int axis);
 	__host__ __device__ float voxelToPos(int p, int axis);
 	__host__ __device__ int offset(float x, float y, float z);
