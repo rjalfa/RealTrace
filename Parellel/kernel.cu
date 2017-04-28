@@ -17,7 +17,7 @@
 #define ETA 1.5
 #define KA 0.4
 
-__device__ unsigned char clip(float x) { return x > 255 ? 255 : (x < 0 ? 0 : x); }
+__device__ inline unsigned char clip(float x) { return x > 255 ? 255 : (x < 0 ? 0 : x); }
 
 UniformGrid * d_uniform_grid;
 float3* colors = 0;
@@ -30,7 +30,7 @@ cudaEvent_t event[MAXSTREAMS];
 cudaStream_t stream[MAXSTREAMS];
 
 // kernel function to compute decay and shading
-__device__ void get_color_from_float3(float3 color, uchar4* cell)
+__device__ inline void get_color_from_float3(float3 color, uchar4* cell)
 {
 	cell->x = clip(color.x * 255);
 	cell->y = clip(color.y * 255);
@@ -52,7 +52,7 @@ __device__ float3 refract(const float3 &I, const float3 &N, const float &ior)
 	} 
 	float eta = etai / etat; 
 	float k = 1 - eta * eta * (1 - cosi * cosi); 
-	return (k < 0) ? make_float3(0,0,0) : (eta * I + (eta * cosi - sqrtf(k)) * n); 
+	return (k < 0) ? make_float3(0,0,0) : (eta * I + (eta * cosi - __fsqrt_rz(k)) * n); 
 }
 
 __device__ void fresnel(const float3& I, const float3& N, const float& ior, float &kr)
@@ -65,13 +65,13 @@ __device__ void fresnel(const float3& I, const float3& N, const float& ior, floa
 		etat = t;
 	}
 	// Compute sini using Snell's law
-	float sint = etai / etat * sqrtf(max(0.f, 1 - cosi * cosi));
+	float sint = etai / etat * __fsqrt_rz(max(0.f, 1 - cosi * cosi));
 	// Total internal reflection
 	if (sint >= 1) {
 		kr = 1;
 	}
 	else {
-		float cost = sqrtf(max(0.f, 1 - sint * sint));
+		float cost = __fsqrt_rz(fmaxf(0.f, 1 - sint * sint));
 		cosi = fabsf(cosi);
 		float Rs = ((etat * cosi) - (etai * cost)) / ((etat * cosi) + (etai * cost));
 		float Rp = ((etai * cosi) - (etat * cost)) / ((etai * cosi) + (etat * cost));
@@ -94,7 +94,7 @@ __device__ void intersect(Triangle* triangles, int num_triangles, Ray* r)
 
 //Shared Memory Loop Intersect
 
-__device__ void intersect(Triangle* triangles, int num_triangles, Ray* r, UniformGrid * ug)
+__device__ inline void intersect(Triangle* triangles, int num_triangles, Ray* r, UniformGrid * ug)
 {
 //  __shared__ Triangle localObjects[32];
 //  int triangles_to_scan = num_triangles;
@@ -165,7 +165,7 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
 
 	int flag = 0;
 	flag |= (out_rays_refract != NULL && out_coeffs_refract != NULL);
-	flag |= 2*(out_rays_reflect != NULL && out_coeffs_reflect != NULL);
+	flag |= (out_rays_reflect != NULL && out_coeffs_reflect != NULL) << 1;
 	if(out_coeffs_reflect != NULL) out_coeffs_reflect[index] = 0;
 	if(out_coeffs_refract != NULL) out_coeffs_refract[index] = 0;
 
@@ -182,43 +182,37 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
 		intersected = ray.intersected;
 		float3 I = normalize(ray.direction);
 		float3 N = normalize(intersected->get_normal());
-		flag |= 4*(intersected->type_of_material == REFLECTIVE);
-		flag |= 8*(intersected->type_of_material == REFRACTIVE);
-		//will_reflect = (intersected->type_of_material == REFLECTIVE);
-		//will_refract = (intersected->type_of_material == REFRACTIVE);
+		flag |= (intersected->type_of_material == REFLECTIVE) << 2;
+		flag |= (intersected->type_of_material == REFRACTIVE) << 3;
 		finalColor = get_light_color(get_point(&ray, ray.t), N, l, intersected, I);
 		finalColor += (intersected)->color * KA;
 		//Reflect
-		if ((flag & 2) && (flag & 4))
+		float kr;
+		bool outside = (dotProduct(I, N) < 0);
+		float eff_eta = ETA;
+		fresnel(I, N, eff_eta, kr);
+		float3 bias = N * 1e-4f;
+		float3 hitPoint = ray.getPosition();
+		
+		if(flag & 4) kr = KR;
+
+		if(flag & 6 == 6 || ((flag & 1) && (flag & 8)))
 		{
-			float3 R = reflect(I, N);
-			Ray reflectedRay(ray.getPosition() + 1e-4 * R, R);
-			out_rays_reflect[index] = reflectedRay;
-			out_coeffs_reflect[index] = in_coeff * KR;
-			finalColor *= (1 - KR);
+			float3 reflectionDirection = reflect(I, N);
+			float3 reflectionRayOrig = outside ? hitPoint + bias : hitPoint - bias;
+			out_rays_reflect[index] = Ray(reflectionRayOrig, reflectionDirection);
+			out_coeffs_reflect[index] = in_coeff * kr;
+			in_coeff *= (1 - kr);
 		}
-		else if ((flag & 1) && (flag & 8))
+		
+		if ((flag & 1) && (flag & 8))
 		{
-			// compute fresnel
-			float kr;
-			float3 hitPoint = ray.getPosition();
-			bool outside = (dotProduct(I, N) < 0);
-			float eff_eta = ETA;
-			fresnel(I, N, eff_eta, kr);
-			float3 bias = N * 1e-4f;
-			// compute refraction if it is not a case of total internal reflection
 			if (kr < 1) {
 				float3 refractionDirection = refract(I, N, eff_eta);
 				float3 refractionRayOrig = outside ? hitPoint - bias : hitPoint + bias;
 				out_rays_refract[index] = Ray(refractionRayOrig, refractionDirection);
 				out_coeffs_refract[index] = in_coeff * (1 - kr);
 			}
-			float3 reflectionDirection = reflect(I, N);
-			float3 reflectionRayOrig = outside ? hitPoint + bias : hitPoint - bias;
-
-			out_rays_reflect[index] = Ray(reflectionRayOrig, reflectionDirection);
-			out_coeffs_reflect[index] = in_coeff * kr;
-			// mix the two
 			in_coeff = 0.0;
 		}
 	}

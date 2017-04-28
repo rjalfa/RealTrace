@@ -8,12 +8,12 @@ LDFLAGS += -lglut -lGL -lGLU
 endif
 
 NVCC = /usr/local/cuda/bin/nvcc
-NVCC_FLAGS = -g -G -Xcompiler "-Wall -Wno-deprecated-declarations -Wno-deprecated-gpu-targets" -dc --gpu-architecture=compute_35 --gpu-code=sm_35
+NVCC_FLAGS = -g -G -Xcompiler "-Wall -Wno-deprecated-declarations -Wno-deprecated-gpu-targets" -dc --use_fast_math --gpu-architecture=compute_35 --gpu-code=sm_35
 
 all: main
 
 main: main.o kernel.o structures.o utilities.o camera.o interactive_camera.o interactions.o
-	$(NVCC) $^ -o $@ $(LDFLAGS) $(EXTRA) --gpu-architecture=compute_35 --gpu-code=sm_35
+	$(NVCC) $^ -o $@ $(LDFLAGS) $(EXTRA) --gpu-architecture=compute_35 --gpu-code=sm_35 --use_fast_math
 
 main.o: main.cu kernel.h interactions.h structures.h
 	$(NVCC) $(NVCC_FLAGS) -c $< -o $@ $(EXTRA)
