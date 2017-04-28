@@ -32,9 +32,6 @@ __host__ __device__ float3 get_point(Ray* r, float t)
 	return r->origin + t * r->direction;
 }
 
-__device__ float dotProduct(const float3& v1, const float3& v2)
-{ return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z; }
-
 __device__ float tripleProduct(const float3& v1, const float3& v2, const float3& v3)
 {
 	return dotProduct(( crossProduct(v1, v2)), v3);

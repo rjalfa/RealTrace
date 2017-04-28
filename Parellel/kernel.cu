@@ -160,8 +160,10 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
 	int index = (blockDim.x * blockIdx.x + threadIdx.x) + (blockDim.y * blockIdx.y + threadIdx.y) * w;
 	//Switches
 	float in_coeff = ((in_coeffs != NULL) ? in_coeffs[index] : 1.00);
-	in_coeff = clamp(in_coeff, 0, 1);
-	if (in_coeff < EPSILON || rays[index].direction == make_float3(0, 0, 0)) return;
+	in_coeff = __saturatef(in_coeff);
+	//clamp(in_coeff, 0, 1);
+	Ray ray = rays[index];
+	if (in_coeff < EPSILON || ray.direction == make_float3(0, 0, 0)) return;
 
 	int flag = 0;
 	flag |= (out_rays_refract != NULL && out_coeffs_refract != NULL);
@@ -170,7 +172,6 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
 	if(out_coeffs_refract != NULL) out_coeffs_refract[index] = 0;
 
 	//Get owned ray
-	Ray ray = rays[index];
 	if (in_coeff < EPSILON || ray.direction == make_float3(0, 0, 0)) return;
 	
 	intersect(triangles, num_triangles, &ray, ug);
