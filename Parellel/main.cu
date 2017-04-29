@@ -257,7 +257,7 @@ void exitfunc() {
 	cudaHostUnregister(h_camera);
 	delete h_camera;
 	delete interaction;
-	// free_space_for_kernels();
+	free_space_for_kernels();
 	checkCudaErrors(cudaFree(d_light));
 	checkCudaErrors(cudaFree(d_triangles));
 	checkCudaErrors(cudaFree(d_camera));
