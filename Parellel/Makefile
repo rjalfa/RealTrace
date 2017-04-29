@@ -37,4 +37,4 @@ interactions.o: interactions.cu interactions.h
 	$(NVCC) $(NVCC_FLAGS) -c $< -o $@ $(EXTRA) $(LDFLAGS)
 
 clean:
-	-rm -f main main.o kernel.o structures.o utilities.o
+	-rm -f main main.o kernel.o structures.o utilities.o camera.o interactive_camera.o interactions.o

@@ -150,14 +150,21 @@ __global__ void createRaysAndResetImage(Camera* camera, int w, int h, Ray* out_r
 // l = LightSource object
 // ug = UniformGrid object
 ////////////////////////////////////////////////////////////////////////////
-__global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray* rays, Ray* out_rays_reflect, float* out_coeffs_reflect, Ray* out_rays_refract, float* out_coeffs_refract, Triangle* triangles, int num_triangles, LightSource* l, UniformGrid * ug)
+__global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray* rays, Ray* out_rays_reflect, float* out_coeffs_reflect, Ray* out_rays_refract, float* out_coeffs_refract, Triangle* triangles, int num_triangles, LightSource* p_l, UniformGrid * p_ug)
 {
+
+	__shared__ LightSource l;
+	__shared__ UniformGrid ug;
+
+	if(threadIdx.x == 0 && threadIdx.y == 0) {l = *p_l; ug = *p_ug;}
+	__syncthreads();
+
 	if (out_color == NULL || rays == NULL) return;
 	//int i = blockDim.x * blockIdx.x + threadIdx.x;
 	//int j = blockDim.y * blockIdx.y + threadIdx.y;
-	int index = (blockDim.x * blockIdx.x + threadIdx.x) + (blockDim.y * blockIdx.y + threadIdx.y) * w;
+	register int index = (blockDim.x * blockIdx.x + threadIdx.x) + (blockDim.y * blockIdx.y + threadIdx.y) * w;
 	//Switches
-	float in_coeff = ((in_coeffs != NULL) ? in_coeffs[index] : 1.00);
+	register float in_coeff = ((in_coeffs != NULL) ? in_coeffs[index] : 1.00);
 	in_coeff = __saturatef(in_coeff);
 	//clamp(in_coeff, 0, 1);
 	Ray ray = rays[index];
@@ -170,19 +177,19 @@ __global__ void raytrace(float3 *out_color, float* in_coeffs, int w, int h, Ray*
 
 	//Get owned ray
 	
-	intersect(triangles, num_triangles, &ray, ug, in_coeff);
+	intersect(triangles, num_triangles, &ray, &ug, in_coeff);
 	if (in_coeff < EPSILON || ray.direction == make_float3(0, 0, 0)) return;
 	//bool reflect_over_refract = false;
 	//Do one time intersection
 	float3 finalColor = AMBIENT_COLOR;
-	Triangle* intersected = 0;
+	register Triangle* intersected = 0;
 	if (ray.has_intersected) {
 		intersected = ray.intersected;
 		float3 I = normalize(ray.direction);
 		float3 N = normalize(intersected->get_normal());
 		flag |= (intersected->type_of_material == REFLECTIVE) << 2;
 		flag |= (intersected->type_of_material == REFRACTIVE) << 3;
-		finalColor = get_light_color(get_point(&ray, ray.t), N, l, intersected, I);
+		finalColor = get_light_color(get_point(&ray, ray.t), N, &l, intersected, I);
 		finalColor += (intersected)->color * KA;
 		//Reflect
 		float kr;
