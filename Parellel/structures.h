@@ -97,6 +97,11 @@ struct Ray
 	int has_intersected;
 	Triangle* intersected;
 	float t;
+	__device__ Ray() {
+		has_intersected = false;
+		intersected = 0;
+		t = 1e12;
+	}
 	__host__ __device__
 	void strictSetParameter(float para) {
 		t = para;
