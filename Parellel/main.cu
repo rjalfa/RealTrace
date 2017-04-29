@@ -137,12 +137,12 @@ OPENGL(
 	}
 )
 
-void readData(string file_name, string texture_file_name = "", string occlusion_map_file_name = "")
+void loadModel(string file_name, float scaling_factor = SCALING_FACTOR, float3 translation = make_float3(0,0,0), int type_of_material = DIFFUSE, float3 color = DEFAULT_COLOR)
 {
 	ifstream is(file_name.c_str());
 	if (!is.is_open()) {
 		cerr << "could not open file" << endl;
-		exit(0);
+		return;
 	}
 
 	vector < float3 > vertices;
@@ -165,32 +165,16 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
 				}
 			}
 			Triangle t;
-			t.vertexA = vertices[idx[0][0] - 1] + make_float3(-5, 0, 0);
-			t.vertexB = vertices[idx[1][0] - 1] + make_float3(-5, 0, 0);
-			t.vertexC = vertices[idx[2][0] - 1] + make_float3(-5, 0, 0);
-			t.color = DEFAULT_COLOR;
-			t.type_of_material = REFLECTIVE;
-			Triangle t1;
-			t1.vertexA = vertices[idx[0][0] - 1] + make_float3(5, 0, 0);
-			t1.vertexB = vertices[idx[1][0] - 1] + make_float3(5, 0, 0);
-			t1.vertexC = vertices[idx[2][0] - 1] + make_float3(5, 0, 0);
-			t1.color = make_float3(0,0.1,0.6);
-			t1.type_of_material = DIFFUSE;
-
-			Triangle t2;
-			t2.vertexA = vertices[idx[0][0] - 1] + make_float3(0, 5, 0);
-			t2.vertexB = vertices[idx[1][0] - 1] + make_float3(0, 5, 0);
-			t2.vertexC = vertices[idx[2][0] - 1] + make_float3(0, 5, 0);
-			t2.color = make_float3(0.4,0.1,0.6);
-			t2.type_of_material = REFRACTIVE;
+			t.vertexA = vertices[idx[0][0] - 1] + translation;
+			t.vertexB = vertices[idx[1][0] - 1] + translation;
+			t.vertexC = vertices[idx[2][0] - 1] + translation;
+			t.color = color;
+			t.type_of_material = type_of_material;
 
 			if (h_triangles.size() < static_cast<unsigned int>(num_max)) h_triangles.push_back(t);
-			if (h_triangles.size() < static_cast<unsigned int>(num_max)) h_triangles.push_back(t1);
-			if (h_triangles.size() < static_cast<unsigned int>(num_max)) h_triangles.push_back(t2);
-			// cerr << "rendered\n";
 		} else if (c == "v") {
 			is >> v[0] >> v[1] >> v[2];
-			vertices.push_back(make_float3(v[0]*SCALING_FACTOR, v[1]*SCALING_FACTOR, v[2]*SCALING_FACTOR));
+			vertices.push_back(make_float3(v[0]*scaling_factor, v[1]*scaling_factor, v[2]*scaling_factor));
 		} else if (c == "vn") {
 			is >> v[0] >> v[1] >> v[2];
 			normal_vertices.push_back(make_float3(v[0], v[1], v[2]));
@@ -205,6 +189,11 @@ void readData(string file_name, string texture_file_name = "", string occlusion_
 	}
 	is.close();
 
+
+}
+
+void setupData(string file_name, string texture_file_name = "", string occlusion_map_file_name = "")
+{
 	//Add Floor
 	Triangle f1;
 	f1.vertexA = make_float3(20, 20, 0);
@@ -280,7 +269,8 @@ int main(int argc, char** argv) {
 	string filename = "bob_tri.obj";
 	if (argc > 1) filename = string(argv[1]);
 	if (argc > 2) num_max = atoi(argv[2]);
-	readData(filename);
+	loadModel(filename, SCALING_FACTOR, make_float3(0,0,2));
+	setupData(filename);
 	OPENGL(
 		initGLUT(&argc, argv);
 		gluOrtho2D(0, W, H, 0);

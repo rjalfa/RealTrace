@@ -292,6 +292,7 @@ static const char *_cudaGetErrorEnum(cudaError_t error)
 
 #ifdef __cuda_cuda_h__
 // CUDA Driver API errors
+/*
 static const char *_cudaGetErrorEnum(CUresult error)
 {
 	switch (error)
@@ -476,6 +477,7 @@ static const char *_cudaGetErrorEnum(CUresult error)
 
 	return "<unknown>";
 }
+*/
 #endif
 
 #ifdef CUBLAS_API_H_
