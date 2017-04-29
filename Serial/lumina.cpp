@@ -166,7 +166,7 @@ void init_material_from_obj(Material * m) {
 	m->kd = 0.9;
 	m->ks = 0.4;
 	m->kr = 0.4;
-	m->kt = 0.0;
+	m->kt = 0.6;
 	m->eta = 3.0;
 	m->n = 128;
 }
@@ -263,13 +263,11 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 			Triangle * triangle = new Triangle(vertices[idx[0][0]-1], vertices[idx[1][0]-1], vertices[idx[2][0]-1], m);
 			// Triangle * triangle2 = new Triangle(vertices[idx[0][0]-1] + offset, vertices[idx[1][0]-1] + offset, vertices[idx[2][0]-1] + offset, m1);
 			// cerr << "rendered\n";
-			if(all_triangles.size() < 2000) {
 				all_triangles.push_back(triangle);
 				// all_triangles.push_back(triangle2);
 				world->addObject(triangle);
 				// world->addObject(triangle2);
 				// cout << world->getObjectList().back() << " " << all_triangles.back() << endl;
-			}
 		} else if(c == "v") {
 			is >> v[0] >> v[1] >> v[2];
 			vertices.push_back(Vector3D(v[0]*SCALING_FACTOR, v[1]*SCALING_FACTOR, v[2]*SCALING_FACTOR));
@@ -289,7 +287,7 @@ void load_image_from_obj(World * world, string file_name, string texture_file_na
 	world->uniform_grid = UniformGrid(all_triangles);
 }
 
-int init_resources(void)
+int init_resources(string file)
 {
 	//Create program
 	program = createProgram("vshader.vs", "fshader.fs");
@@ -363,7 +361,7 @@ int init_resources(void)
 	//world->addLight(light2);
 
 	// load_image_from_obj(world, "pig_triangulated.obj");
-	load_image_from_obj(world, "bob_tri.obj");
+	load_image_from_obj(world, file);
 	// load_image_from_obj(world, "bs_angry.obj");
 	// load_image_from_obj(world, "tetrahedron.obj");
 // load_image_from_obj(world, "blub_triangulated.obj");
@@ -477,19 +475,20 @@ void onIdle(void)
 
 int main(int argc, char* argv[])
 {
+	string filename = "bob_tri.obj";
 	if(argc > 1)
 	{
 		screen_width = atoi(argv[1]);
 		screen_height = atoi(argv[2]);
 		screen_width -= (screen_width % 2); //Make it even
 		screen_height -= (screen_height % 2); //Make it even
+		filename = string(argv[3]);
 	}
-	fprintf(stderr, "Welcome to RealTrace. All rights reserved. This application or any portion thereof may not be reproduced or used in any manner whatsoever without the express written permission of the creators except for the use of brief quotations in a code review.\nFull command: %s [width] [height]\nPress 's' to save framebufer to disk.\n", argv[0]);
 	/* Glut-related initialising functions */
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH | GLUT_MULTISAMPLE);
 	glutInitWindowSize(screen_width, screen_height);
-	glutCreateWindow("RealTrace [TM] | Real Time Ray Tracer");
+	glutCreateWindow("RealTrace | Real Time Ray Tracer");
 #if !defined(__APPLE__) && !defined(CUDA_SERVER)
 	GLenum glew_status = glewInit();
 	if(glew_status != GLEW_OK)
@@ -505,7 +504,7 @@ int main(int argc, char* argv[])
 
 	/* When all init functions run without errors,
 	   the program can initialise the resources */
-	if (1 == init_resources())
+	if (1 == init_resources(filename))
 	{
 		/* We can display it if everything goes OK */
 		glutReshapeFunc(onReshape);

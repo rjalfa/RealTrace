@@ -200,13 +200,13 @@ void setupData(string file_name, string texture_file_name = "", string occlusion
 	f1.vertexB = make_float3(20, -20, 0);
 	f1.vertexC = make_float3(-20, 20, 0);
 	f1.color = make_float3(0.5, 0.5, 1.0);
-	f1.type_of_material = REFLECTIVE;
+	f1.type_of_material = DIFFUSE;
 	Triangle f2;
 	f2.vertexA = make_float3(20, -20, 0);
 	f2.vertexB = make_float3(-20, 20, 0);
 	f2.vertexC = make_float3(-20, -20, 0);
 	f2.color = make_float3(0.5, 0.5, 1.0);
-	f2.type_of_material = REFLECTIVE;
+	f2.type_of_material = DIFFUSE;
 	h_triangles.push_back(f1); h_triangles.push_back(f2);
 
 	float3 camera_position = make_float3(60, 0, 60);

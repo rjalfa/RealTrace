@@ -8,7 +8,7 @@
 #include "ray.h"
 #include "uniform-grid.h"
 
-#define RECURSION_DEPTH 10
+#define RECURSION_DEPTH 3
 class World
 {
 private:

@@ -480,5 +480,6 @@ void kernelLauncher(uchar4 *d_out, int w, int h, Camera* camera, Triangle* trian
 	convert_to_rgba <<< gridSize, blockSize>>>(colors, d_out, w, h);
 	cudaEventSynchronize(event[1]);
 	cudaEventSynchronize(event[2]);
+	cudaDeviceSynchronize();
 	// cudaProfilerStop();
 }

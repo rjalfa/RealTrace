@@ -13,12 +13,12 @@
 #define DEFAULT_COLOR make_float3(0.8,0.7,0.0)
 #include <cuda_runtime.h>
 #include "helper_cuda.h"
-#define SCALING_FACTOR 2
+#define SCALING_FACTOR 15
 #define W 512
 #define H 512
 using namespace std;
 
-int num_max = 1000000000;
+int num_max = 10000000;
 int screen_width = W;
 int screen_height = H;
 Camera * h_camera;
