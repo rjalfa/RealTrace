@@ -187,7 +187,7 @@ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray, float in_
 	// check ray against overall grid bounds
 	__shared__ float3 sh_bounds_a[2];
 	__shared__ int cmpToAxis[8];
-
+	__shared__ int sh_width[3], sh_nVoxels[3];
 	if(threadIdx.x == 0 && threadIdx.y == 0)
 	{
 		sh_bounds_a[0] = bounds_a[0];
@@ -200,6 +200,11 @@ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray, float in_
 		cmpToAxis[5] = 2;
 		cmpToAxis[6] = 0;
 		cmpToAxis[7] = 0;
+	}
+
+	if(threadIdx.x <= 2 && threadIdx.y == 0) {
+		sh_width[threadIdx.x] = width[threadIdx.x];
+		sh_nVoxels[threadIdx.x] = nVoxels[threadIdx.x];
 	}
 	__syncthreads();
 
@@ -233,56 +238,107 @@ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray, float in_
 	}
 
 	float3 gridIntersectf3 = get_point(&ray, ray.t);
-	float gridIntersect[3];
-//	gridIntersectX = gridIntersectf3.x;
-//	gridIntersectY = gridIntersectf3.y;
-//	gridIntersectZ = gridIntersectf3.z;
-	gridIntersect[0] = gridIntersectf3.x;
-	gridIntersect[1] = gridIntersectf3.y;
-	gridIntersect[2] = gridIntersectf3.z;
-	float direction[3];
-	direction[0] = ray.direction.x;
-	direction[1] = ray.direction.y;
-	direction[2] = ray.direction.z;
-	int pos[3], step[3], out[3];
-	float nextCrossingT[3], deltaT[3];
+//	float gridIntersect[3];
+	float gridIntersect0, gridIntersect1, gridIntersect2;
+	float direction0, direction1, direction2;
+	float nextCrossingT0, nextCrossingT1, nextCrossingT2;
+	float deltaT0, deltaT1, deltaT2;
+	int pos0, pos1, pos2;
+	int step0, step1, step2;
+	int out0, out1, out2;
+	gridIntersect0 = gridIntersectf3.x;
+	gridIntersect1 = gridIntersectf3.y;
+	gridIntersect2 = gridIntersectf3.z;
+//	float direction[3];
+	direction0 = dirx;
+	direction1 = diry;
+	direction2 = dirz;
+//	int pos[3], step[3], out[3];
+//	float nextCrossingT[3], deltaT[3];
 	// set up 3D DDA for ray
 
 	bool sign;
 	int delta_coeff;
-	#pragma unroll
-	for (int axis = 0; axis < 3; axis++) {
+
+	 {
 		// compute current voxel for axis
-		pos[axis] = posToVoxel(gridIntersect[axis], axis);
-		sign = (direction[axis] >= 0);
+		pos0 = posToVoxel(gridIntersect0, 0);
+		sign = (direction0 >= 0);
 		delta_coeff = (1 * sign) + (-1 * (1 - sign));
 
-		nextCrossingT[axis] = rayT + (voxelToPos(pos[axis] + sign, axis) - gridIntersect[axis]) / direction[axis];
-		deltaT[axis] = (delta_coeff * width[axis]) / direction[axis];
-		step[axis] = delta_coeff;
-		out[axis] = (nVoxels[axis] * sign) + (-1 * (1 - sign));
+		nextCrossingT0 = rayT + (voxelToPos(pos0 + sign, 0) - gridIntersect0) / direction0;
+		deltaT0 = (delta_coeff * sh_width[0]) / direction0;
+		step0 = delta_coeff;
+		out0 = (sh_nVoxels[0] * sign) + (-1 * (1 - sign));
 	}
 
+	{
+		// compute current voxel for axis
+		pos1 = posToVoxel(gridIntersect1, 1);
+		sign = (direction1 >= 0);
+		delta_coeff = (1 * sign) + (-1 * (1 - sign));
+
+		nextCrossingT1 = rayT + (voxelToPos(pos1 + sign, 1) - gridIntersect1) / direction1;
+		deltaT1 = (delta_coeff * sh_width[1]) / direction1;
+		step1 = delta_coeff;
+		out1 = (sh_nVoxels[1] * sign) + (-1 * (1 - sign));
+	}
+
+	{
+		// compute current voxel for axis
+		pos2 = posToVoxel(gridIntersect2, 2);
+		sign = (direction2 >= 0);
+		delta_coeff = (1 * sign) + (-1 * (1 - sign));
+
+		nextCrossingT2 = rayT + (voxelToPos(pos2 + sign, 2) - gridIntersect2) / direction2;
+		deltaT2 = (delta_coeff * sh_width[2]) / direction2;
+		step2 = delta_coeff;
+		out2 = (sh_nVoxels[2] * sign) + (-1 * (1 - sign));
+	}
+
+//	#pragma unroll
+//	for (int axis = 0; axis < 3; axis++) {
+//		// compute current voxel for axis
+//		pos[axis] = posToVoxel(gridIntersect[axis], axis);
+//		sign = (direction[axis] >= 0);
+//		delta_coeff = (1 * sign) + (-1 * (1 - sign));
+//
+//		nextCrossingT[axis] = rayT + (voxelToPos(pos[axis] + sign, axis) - gridIntersect[axis]) / direction[axis];
+//		deltaT[axis] = (delta_coeff * width[axis]) / direction[axis];
+//		step[axis] = delta_coeff;
+//		out[axis] = (nVoxels[axis] * sign) + (-1 * (1 - sign));
+//	}
+
 	// walk ray through voxel grid
-	bool hitSomething = false;
+	bool hitSomething = false, break_cnd = false;
 	ray.strictSetParameter(SICK_FLT_MAX);
 	for ( ; ; ) {
 		// check for intersection in current voxel and advance to next
 		// Voxel * voxel = voxels[offset(pos[0], pos[1], pos[2])];
-		int voxel = offset(pos[0], pos[1], pos[2]);
+		int voxel = offset(pos0, pos1, pos2);
 
 		hitSomething |= Voxel::intersect(this, triangles, ray, voxel);
+		if (hitSomething) break;
 		// advance to next voxel
 		// find stepAxis for stepping to next voxel
-		int bits =  ((nextCrossingT[0] < nextCrossingT[1]) << 2) +
-					((nextCrossingT[0] < nextCrossingT[2]) << 1) +
-					((nextCrossingT[1] < nextCrossingT[2]));
+		int bits =  ((nextCrossingT0 < nextCrossingT1) << 2) +
+					((nextCrossingT0 < nextCrossingT2) << 1) +
+					((nextCrossingT1 < nextCrossingT2));
 		int stepAxis = cmpToAxis[bits];
 
-		pos[stepAxis] += step[stepAxis];
-		if (pos[stepAxis] == out[stepAxis]) break;
-		if (hitSomething) break;
-		nextCrossingT[stepAxis] += deltaT[stepAxis];
+		pos0 += (stepAxis == 0) * step0;
+		pos1 += (stepAxis == 1) * step1;
+		pos2 += (stepAxis == 2) * step2;
+//		pos[stepAxis] += step[stepAxis];
+		break_cnd |= (stepAxis == 0 && pos0 == out0);
+		break_cnd |= (stepAxis == 1 && pos1 == out1);
+		break_cnd |= (stepAxis == 2 && pos2 == out2);
+		if(break_cnd) break;
+//		if (pos[stepAxis] == out[stepAxis]) break;
+		nextCrossingT0 += (stepAxis == 0) * deltaT0;
+		nextCrossingT1 += (stepAxis == 1) * deltaT1;
+		nextCrossingT2 += (stepAxis == 2) * deltaT2;
+//		nextCrossingT[stepAxis] += deltaT[stepAxis];
 	}
 	return hitSomething;
 }
