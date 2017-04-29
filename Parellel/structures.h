@@ -180,6 +180,7 @@ class UniformGrid {
 
 public:
 	int * index_pool;
+	texture<int, 3, cudaReadModeNormalizedFloat> *tex_lower_limit;  // 3D texture
 	int * lower_limit, * upper_limit;
 	int nv;
 	BBox bounds;
@@ -190,6 +191,8 @@ public:
 		nv = 0;
 		voxelsPerUnitDist = 0;
 	};
+
+	friend void createTexture();
 	__host__ void initialize(int num_triangles);
 //	__host__ __device__ void buildGrid(Triangle * p);
 	__device__ bool intersect(Triangle * triangles, Ray& ray, float in_coeff);

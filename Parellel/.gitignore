@@ -1,4 +1,6 @@
 main
+main_frame
 *.png
 *.mp4
+*.ppm
 GPUPathTracer/

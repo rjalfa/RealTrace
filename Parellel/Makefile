@@ -15,6 +15,12 @@ all: main
 main: main.o kernel.o structures.o utilities.o camera.o interactive_camera.o interactions.o
 	$(NVCC) $^ -o $@ $(LDFLAGS) $(EXTRA) --gpu-architecture=compute_35 --gpu-code=sm_35 --use_fast_math -O4
 
+main_frame: main_frame.o kernel.o structures.o utilities.o camera.o
+	$(NVCC) $^ -o $@ $(LDFLAGS) $(EXTRA) --gpu-architecture=compute_35 --gpu-code=sm_35 --use_fast_math -O4
+
+main_frame.o: main_frame.cu kernel.h structures.h
+	$(NVCC) $(NVCC_FLAGS) -c $< -o $@ $(EXTRA)
+
 main.o: main.cu kernel.h interactions.h structures.h
 	$(NVCC) $(NVCC_FLAGS) -c $< -o $@ $(EXTRA)
 
