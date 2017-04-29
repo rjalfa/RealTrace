@@ -6,6 +6,8 @@
 #define REFLECTIVE 2
 #define DIFFUSE 1
 using namespace std;
+#define TX 16
+#define TY 16
 
 class Triangle;
 

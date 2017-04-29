@@ -186,11 +186,20 @@ __host__ __device__ void Triangle::getWorldBound(float& xmin, float& xmax, float
 __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray, float in_coeff) {
 	// check ray against overall grid bounds
 	__shared__ float3 sh_bounds_a[2];
-
+	__shared__ int cmpToAxis[8];
+		
 	if(threadIdx.x == 0 && threadIdx.y == 0)
 	{
 		sh_bounds_a[0] = bounds_a[0];
 		sh_bounds_a[1] = bounds_a[1];
+		cmpToAxis[0] = 2;
+		cmpToAxis[1] = 1;
+		cmpToAxis[2] = 2;
+		cmpToAxis[3] = 1;
+		cmpToAxis[4] = 2;
+		cmpToAxis[5] = 2;
+		cmpToAxis[6] = 0;
+		cmpToAxis[7] = 0;
 	}
 	__syncthreads();
 
@@ -224,10 +233,10 @@ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray, float in_
 	}
 
 	float3 gridIntersectf3 = get_point(&ray, ray.t);
-	float gridIntersect[3];
-	gridIntersect[0] = gridIntersectf3.x;
-	gridIntersect[1] = gridIntersectf3.y;
-	gridIntersect[2] = gridIntersectf3.z;
+	float gridIntersectX,gridIntersectY,gridIntersectZ;
+	gridIntersectX = gridIntersectf3.x;
+	gridIntersectY = gridIntersectf3.y;
+	gridIntersectZ = gridIntersectf3.z;
 	float direction[3];
 	direction[0] = ray.direction.x;
 	direction[1] = ray.direction.y;
@@ -235,6 +244,57 @@ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray, float in_
 	int pos[3], step[3], out[3];
 	float nextCrossingT[3], deltaT[3];
 	// set up 3D DDA for ray
+	
+	int axis = 0;
+
+	pos[axis] = posToVoxel(gridIntersectX, axis);
+	if (direction[axis] >= 0) {
+		// handle ray with positive direction for voxel stepping
+		nextCrossingT[axis] = rayT + (voxelToPos(pos[axis] + 1, axis) - gridIntersectX) / direction[axis];
+		deltaT[axis] = width[axis] / direction[axis];
+		step[axis] = 1;
+		out[axis] = nVoxels[axis];
+	} else {
+		// handle ray with negative direction for voxel stepping
+		nextCrossingT[axis] = rayT + (voxelToPos(pos[axis], axis) - gridIntersectX) / direction[axis];
+		deltaT[axis] = -width[axis] / direction[axis];
+		step[axis] = -1;
+		out[axis] = -1;
+	}
+	axis ++;
+
+	pos[axis] = posToVoxel(gridIntersectY, axis);
+	if (direction[axis] >= 0) {
+		// handle ray with positive direction for voxel stepping
+		nextCrossingT[axis] = rayT + (voxelToPos(pos[axis] + 1, axis) - gridIntersectY) / direction[axis];
+		deltaT[axis] = width[axis] / direction[axis];
+		step[axis] = 1;
+		out[axis] = nVoxels[axis];
+	} else {
+		// handle ray with negative direction for voxel stepping
+		nextCrossingT[axis] = rayT + (voxelToPos(pos[axis], axis) - gridIntersectY) / direction[axis];
+		deltaT[axis] = -width[axis] / direction[axis];
+		step[axis] = -1;
+		out[axis] = -1;
+	}
+	axis++;
+
+	pos[axis] = posToVoxel(gridIntersectZ, axis);
+	if (direction[axis] >= 0) {
+		// handle ray with positive direction for voxel stepping
+		nextCrossingT[axis] = rayT + (voxelToPos(pos[axis] + 1, axis) - gridIntersectZ) / direction[axis];
+		deltaT[axis] = width[axis] / direction[axis];
+		step[axis] = 1;
+		out[axis] = nVoxels[axis];
+	} else {
+		// handle ray with negative direction for voxel stepping
+		nextCrossingT[axis] = rayT + (voxelToPos(pos[axis], axis) - gridIntersectZ) / direction[axis];
+		deltaT[axis] = -width[axis] / direction[axis];
+		step[axis] = -1;
+		out[axis] = -1;
+	}
+
+	/*
 	for (int axis = 0; axis < 3; axis++) {
 		// compute current voxel for axis
 		pos[axis] = posToVoxel(gridIntersect[axis], axis);
@@ -253,6 +313,8 @@ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray, float in_
 		}
 		// cerr << pos[axis] << " " << step[axis] << " " << out[axis] << endl;
 	}
+	*/
+
 	// walk ray through voxel grid
 	bool hitSomething = false;
 	ray.strictSetParameter(SICK_FLT_MAX);
@@ -267,7 +329,6 @@ __device__ bool UniformGrid::intersect(Triangle * triangles, Ray& ray, float in_
 		int bits =  ((nextCrossingT[0] < nextCrossingT[1]) << 2) +
 					((nextCrossingT[0] < nextCrossingT[2]) << 1) +
 					((nextCrossingT[1] < nextCrossingT[2]));
-		const int cmpToAxis[8] = {2, 1, 2, 1, 2, 2, 0, 0};
 		int stepAxis = cmpToAxis[bits];
 
 		pos[stepAxis] += step[stepAxis];

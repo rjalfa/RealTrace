@@ -8,8 +8,6 @@
 #include "helper_cuda.h"
 #include "cuda_profiler_api.h"
 #include "utilities.h"
-#define TX 16
-#define TY 16
 #define AMBIENT_COLOR make_float3(0.235294, 0.67451, 0.843137)
 #define KR 0.3
 #define KT 0.3
